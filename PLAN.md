@@ -6,7 +6,8 @@
 **Reused material:**
 - A1 skill: `../Assignment1/.claude/skills/requirements-spec/` → Stage 1
 - A2 architecture doc: `../Assignment2/experiment/ARCHITECTURE.md` → Stage 2
-- Local agent runtime: Claude Code CLI 2.1.294 (`claude -p`, headless), same as A2
+- Agent runtime: **Gemini CLI 0.70.0** (`gemini -p`, headless, `--output-format stream-json`), key in secret `GEMINI_API_KEY`
+- Models: builder `gemini-3-flash-preview`, reviewer `gemini-3-pro-preview` (fallbacks `gemini-2.5-flash` / `gemini-2.5-pro`), set in `autose/config.yaml`
 
 **Diagrams (draw.io):** `architecture/views/*.drawio`. Open them in VS Code with the
 *Draw.io Integration* extension (`code --install-extension hediet.vscode-drawio`) or at
@@ -51,7 +52,7 @@ Assignment3/                 ← submission repo (git root)
 ### 0.2 Proposed architecture (to be justified in ADRs; change it if you disagree)
 
 - **2 agent roles:** a **Builder** (stages 1–4, plus the rework after a review) and an independent
-  **Reviewer** (stage 6). Builder stages are **separate `claude -p` calls with fresh context**,
+  **Reviewer** (stage 6). Builder stages are **separate `gemini -p` calls with fresh context**,
   so each stage only gets the artifacts it needs, not the conversation so far.
 - **Control flow:** a deterministic **Python state machine** (`autose/orchestrator.py`) inside the build
   job decides which stage runs next and when to go back. The review loop is **written out as fixed
@@ -139,10 +140,10 @@ Take a screenshot of the ruleset for the report appendix. From now on, every cha
 
 ### 1.5 Secrets and spending limit
 ```bash
-gh secret set ANTHROPIC_API_KEY -R <you>/mistune      # paste when prompted; never echo it
+gh secret set GEMINI_API_KEY -R <you>/mistune         # paste when prompted; never echo it   (DONE)
 ```
-- console.anthropic.com → Settings → Limits → set a **monthly spend limit** (e.g. $20) **before the first run**.
-  Screenshot it for the report.
+- Google Cloud Console → Billing → Budgets & alerts → budget (e.g. $10) **before the first run** (or note free tier = rate-limited).
+  Screenshot it for the report. The orchestrator also enforces a per-run token cap.
 - Never print the key. The orchestrator must not log the environment.
 
 ### 1.6 Initialise the submission repo
@@ -244,7 +245,8 @@ Plan for at least one supersession; it is good evidence that you learned from th
 ARCHITECTURE.md                       ← from A2 (Stage 2 input)
 autose/
   orchestrator.py                     ← state machine: build | rework | review-only
-  agent.py                            ← run_claude(prompt, model, tools, max_turns) → result + usage
+  agent.py                            ← run_gemini(role, prompt, model) → response + stats (stream-json)
+  policies/builder.toml reviewer.toml ← Gemini CLI policy-engine rules (passed with --admin-policy)
   checks/
     spec_lint.py                      ← AC ids, Given/When/Then, + optional LLM judge
     design_refs.py                    ← every file/function named in design.md exists (ast)
@@ -298,11 +300,11 @@ jobs:
         with: { fetch-depth: 0, persist-credentials: false }
       - uses: astral-sh/setup-uv@v10.3.0
         with: { python-version: "3.13" }
-      - run: npm i -g @anthropic-ai/claude-code@2.1.294 && uv sync --group test
+      - run: npm i -g @google/gemini-cli@0.70.0 && uv sync --group test
       - run: uv run python autose/orchestrator.py build --issue "$ISSUE" --out out/
         env:
           ISSUE: ${{ needs.gate.outputs.issue }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}    # orchestrator only; stripped from agent subprocesses
       - uses: actions/upload-artifact@v6
         if: always()
@@ -312,7 +314,7 @@ jobs:
     needs: [gate, build]
     if: always() && (needs.build.result == 'success' || needs.gate.outputs.mode == 'review')
     permissions: { contents: read, pull-requests: read, issues: read }
-    # checkout refs/pull/<pr>/head (persist-credentials: false), run autose/reviewer via claude -p
+    # checkout refs/pull/<pr>/head (persist-credentials: false), run autose/reviewer via gemini -p
     # with the REVIEWER model; inputs = issue text + `gh pr diff` + checkout. NO download of build-*.
     # upload artifact review-1 (review.md + verdict.json)
 
@@ -354,17 +356,22 @@ Budgets: per-stage max_turns, per-run max $ (sum of usage.json), per-job timeout
 (`workflow_dispatch` *is* allowed from `GITHUB_TOKEN`; `tests.yml` already has it) and waits for it.
 Also note that CI runs **ruff + mypy**, so `build_check.sh` must run them too or Stage 5 will fail.
 
-### 4.4 Calling an agent (`agent.py`)
+### 4.4 Calling an agent (`agent.py`, Gemini CLI 0.70.0)
 ```bash
-claude -p "$PROMPT" --model "$MODEL" --output-format json --max-turns 30 \
-  --allowedTools "Read,Edit,Write,Glob,Grep,Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv run mypy:*)" \
-  --disallowedTools "WebFetch,WebSearch,Bash(git push:*),Bash(gh:*),Bash(curl:*),Bash(wget:*)"
+HOME=$TMP/agent-home GEMINI_CLI_TRUST_WORKSPACE=true \
+gemini -p "$PROMPT" -m "$MODEL" --output-format stream-json --approval-mode default \
+       --admin-policy autose/policies/<role>.toml
 ```
-- Run it with `env = {PATH, HOME, ANTHROPIC_API_KEY}` only (no `GH_TOKEN`, no `GITHUB_*`).
-- Save `result`, `usage` and `total_cost_usd` from the JSON in `out/usage/<stage>-<attempt>.json` → token report.
-- Save the transcript in `out/transcripts/` (builder only; this is for people reading the run, and the reviewer never gets it).
-- Check the exact flag names with `claude --help` locally first (CLI 2.1.294).
-- Reviewer tools: `Read,Glob,Grep,Bash(uv run pytest:*),Bash(uv run python:*),Bash(git diff:*),Bash(git log:*)`, with no Edit/Write on the repo and no `gh`. Its token is read-only anyway.
+- **Least privilege by policy file** (`autose/policies/builder.toml`, `reviewer.toml`): explicit `allow` rules
+  for the tools a role needs (`read_file`, `glob`, `grep_search`, `write_file`, `replace`,
+  `run_shell_command` with `commandPrefix` = `uv run pytest|ruff|mypy|python`); `deny` for `web_fetch`,
+  `google_web_search`, `git push`, `gh`, `curl`, `wget`. Anything else falls to `ask_user`, which is
+  **denied in headless mode**. Admin tier, so a workspace file can't override it.
+- **Per-call HOME** (`~/.gemini/settings.json` with `model.maxSessionTurns`, and `~/.gemini/skills/`
+  containing the A1 skill **only for the spec agent**). Env = `{PATH, HOME, GEMINI_API_KEY}`, no `GH_TOKEN`.
+- `stream-json` events → `out/transcripts/<stage>-<n>.jsonl` (builder only); final `result` event stats →
+  `out/usage/<stage>-<n>.json` (token report). Exit code 53 = turn limit hit → stage fails with that reason.
+- Reviewer policy: read tools + `uv run pytest|python`, `git diff|log|show`; `write_file`/`replace` denied.
 
 ### 4.5 Prompts: what goes in, what is left out (feeds ADR-003)
 | Stage | Receives | Deliberately excluded |
@@ -482,7 +489,7 @@ Record with OBS / `simplescreenrecorder`. You can speed up the waiting parts (an
 - [ ] `experiment/issues` (5), `hidden_tests` (2–4 each), `seeded_prs` (5 + labels), `variants.md`
 - [ ] `results/results.csv`, `results/runs.md` with working links to every run, PR, review
 - [ ] report.pdf ≤ 8 pages + appendices; demo.mp4 or link
-- [ ] No secrets anywhere (`git grep -i "sk-ant"` returns nothing in both repos)
+- [ ] No secrets anywhere (`git grep -E "AIza[0-9A-Za-z_-]{20,}"` returns nothing in both repos)
 - [ ] No bot PR merged; no push to upstream `lepture/mistune`
 - [ ] Both repos public (or TAs added)
 - [ ] Upload `2025201064_a3_AutoSE.txt` containing only the submission repo URL
