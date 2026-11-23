@@ -259,3 +259,123 @@ for st in steps:
     y += 42
 save(f"{OUT}/sequence-view.drawio", [q])
 print("wrote component-view, stage-map, sequence-view")
+
+
+# ================================================================== workflow-architecture.drawio
+# Same content as workflow-architecture.html, as editable draw.io pages.
+def path(page, pts, label="", style=EDGE, lx=None, ly=None):
+    """Edge through absolute points (first = source point, last = target point)."""
+    cid = page._id()
+    (x1, y1), (x2, y2) = pts[0], pts[-1]
+    mid = "".join(f'<mxPoint x="{x}" y="{y}"/>' for x, y in pts[1:-1])
+    arr = f'<Array as="points">{mid}</Array>' if mid else ""
+    page.cells.append(
+        f'<mxCell id="{cid}" value="" style={quoteattr(style)} edge="1" parent="1">'
+        f'<mxGeometry relative="1" as="geometry"><mxPoint x="{x1}" y="{y1}" as="sourcePoint"/>'
+        f'<mxPoint x="{x2}" y="{y2}" as="targetPoint"/>{arr}</mxGeometry></mxCell>')
+    if label:
+        page.v(label, lx - 110, ly - 12, 220, 20, "text;html=1;align=center;verticalAlign=middle;fontSize=11;"
+               "fontFamily=Courier New;labelBackgroundColor=#ffffff;" + ("fontColor=#b85450;" if "b85450" in style
+                                                                          else "fontColor=#82b366;" if "82b366" in style
+                                                                          else ""))
+
+
+LBOX = "rounded=1;whiteSpace=wrap;html=1;arcSize=6;align=left;verticalAlign=top;spacingLeft=10;spacingTop=4;fontSize=12;"
+SOLID = "html=1;endArrow=block;endFill=1;rounded=0;"
+BACK = SOLID + "strokeColor=#b85450;"
+OKE = SOLID + "strokeColor=#82b366;"
+DASHE = SOLID + "dashed=1;strokeColor=#666666;"
+
+
+def job(page, x, y, name, role, perms, color, w=200, h=92):
+    mono = "<br>".join(f"<font face='Courier New' color='#555555'>{p}</font>" for p in perms)
+    return page.v(f"<b style='font-size:14px'>{name}</b><br>{role}<br>{mono}", x, y, w, h, LBOX + color)
+
+
+# ---- page 1: job graph
+jg = Page("wfjobs", "1 Job graph + permissions", 1150, 560)
+jg.v("<b>AutoSE: Actions job graph</b> (permissions per job; workflow default <font face='Courier New'>permissions: {}</font>)",
+     20, 0, 900, 24, TEXT + "fontSize=16;")
+job(jg, 20, 60, "gate", "who triggered? which mode?", ["issues: write", "no LLM · no secrets"], GREEN)
+job(jg, 300, 60, "build · stages 1–5", "4 builder calls + checks", ["contents, PRs, issues,", "actions: write"], BLUE)
+job(jg, 580, 60, "review-1", f"reviewer agent ({REVIEWER_MODEL})", ["contents: read", "pull-requests: read"], RED)
+job(jg, 860, 60, "publish-1", "posts review, sets label", ["pull-requests: write", "no LLM · no API key"], GREEN)
+job(jg, 860, 280, "rework-1", "code issue → stage 3<br>approach issue → stage 2", ["then 4 → 5 again"], BLUE)
+job(jg, 580, 280, "review-2", "new reviewer call", ["contents: read", "pull-requests: read"], RED)
+job(jg, 300, 280, "publish-2", "posts final review", ["pull-requests: write", "no LLM · no API key"], GREEN)
+job(jg, 20, 280, "finalize", "summary comment + label", ["issues, PRs: write", "always runs"], GREEN)
+jg.v("<b style='font-size:14px'>Human</b><br>merge or close the PR", 20, 432, 200, 60, LBOX + YELLOW)
+path(jg, [(120, 60), (120, 32), (680, 32), (680, 60)], "mode=review · /autose review on a PR", DASHE, 400, 22)
+path(jg, [(220, 106), (300, 106)], "build", SOLID, 260, 94)
+path(jg, [(500, 106), (580, 106)], "PR #", SOLID, 540, 94)
+path(jg, [(780, 106), (860, 106)], "verdict", SOLID, 820, 94)
+path(jg, [(1010, 152), (1010, 280)], "changes requested", BACK, 1080, 214)
+path(jg, [(900, 152), (900, 218), (120, 218), (120, 280)], "approved in round 1", OKE, 510, 208)
+path(jg, [(860, 326), (780, 326)], "push", SOLID, 820, 314)
+path(jg, [(580, 326), (500, 326)], "verdict", SOLID, 540, 314)
+path(jg, [(300, 326), (220, 326)], "final", SOLID, 260, 314)
+path(jg, [(120, 372), (120, 432)], "done | needs-human | failed", SOLID, 240, 402)
+jg.v("No edge leaves review-2: two review rounds is a hard limit. If round 2 still requests changes, finalize labels "
+     "the issue autose:needs-human.<br>The bot never calls merge, and CODEOWNERS means a bot approval cannot satisfy "
+     "the ruleset. Reviewer jobs get a read-only token and never download build artifacts.",
+     300, 430, 760, 70, TEXT + "fontSize=12;fontColor=#555555;")
+
+# ---- page 2: build state machine
+sm = Page("wfstages", "2 Build job state machine", 1150, 400)
+sm.v("<b>Inside the build job</b>: orchestrator.py runs each stage as a fresh <font face='Courier New'>gemini -p</font> "
+     "call, checks it in code, reverts files the stage may not touch, and picks the next step",
+     20, 0, 1080, 24, TEXT + "fontSize=16;")
+stages = [
+    ("1 · Requirements", "agent + A1 skill", "spec.md", "ACs in Given/When/Then,<br>no vague words", "retry ≤1, then STOP", BLUE),
+    ("2 · Design", "agent + ARCHITECTURE.md", "design.md", "named files + functions<br>exist (AST)", "retry ≤1, then STOP", BLUE),
+    ("3 · Implement", "may edit src/ only", "diff.patch", "import, ruff,<br>strict mypy", "retry ≤2, then STOP", BLUE),
+    ("4 · Test", "may edit tests/ only", "test_report.md", "full pytest green,<br>every AC has a test", "loops above, then STOP", BLUE),
+    ("5 · Release", "code + gh CLI", "pr.md + PR link", "PR open, tests.yml<br>run green", "loop below, then STOP", GREEN),
+]
+sx = [20, 242, 464, 686, 908]
+for x, (n, r, art, chk, fail, col) in zip(sx, stages):
+    sm.v(f"<b style='font-size:14px'>{n}</b><br>{r}<br><font face='Courier New'>→ {art}</font><br>"
+         f"<font color='#555555'>{chk}</font><br><font face='Courier New' color='#b85450'>{fail}</font>",
+         x, 130, 170, 124, LBOX + col)
+for a in range(4):
+    x1 = sx[a] + 170
+    path(sm, [(x1, 192), (sx[a + 1], 192)], "pass", SOLID, x1 + 26, 180)
+path(sm, [(780, 130), (780, 58), (330, 58), (330, 130)], "tests still fail · redesign ≤1", BACK, 555, 48)
+path(sm, [(720, 130), (720, 100), (600, 100), (600, 130)], "tests fail · ≤2", BACK, 660, 90)
+path(sm, [(960, 254), (960, 294), (560, 294), (560, 254)], "CI fails · ≤1, with the CI log", BACK, 760, 312)
+sm.v("Every red arrow is chosen by code from a check result, never by an agent. On STOP the reason is appended to that "
+     "stage's artifact and finalize labels the issue autose:failed. A per-run token budget and per-call turn limits "
+     "stop runaway agents.", 20, 330, 1060, 50, TEXT + "fontSize=12;fontColor=#555555;")
+
+# ---- page 3: who holds what (table as a grid of cells)
+wh = Page("wfwho", "3 Who holds what", 1150, 520)
+wh.v("<b>Who holds what</b>: no agent ever receives a GitHub token", 20, 0, 900, 24, TEXT + "fontSize=16;")
+cols = [("Component", 150), ("Kind", 110), ("Sees", 260), ("Can", 270), ("Cannot", 280)]
+rows = [
+    ("gate.py", "code", "event payload (file, never shell)", "accept OWNER/MEMBER/COLLABORATOR; label; comment",
+     "run for untrusted users or bots", GREEN),
+    ("orchestrator.py", "code", "issue, all artifacts, check results", "hold GH_TOKEN; commit; push branch; open PR; dispatch CI",
+     "merge (never calls merge)", GREEN),
+    ("builder agents", "gemini -p (Flash)", "only its stage's inputs; issue wrapped as untrusted",
+     "read/edit files; uv run pytest | ruff | mypy | python", "network, git push/commit, gh, edit outside its folder (reverted)", BLUE),
+    ("reviewer agent", "gemini -p (Pro)", "issue, PR diff, PR-head checkout only", "read code; run tests and probes",
+     "edit files, push, see spec/design/test report/transcripts", RED),
+    ("publish / finalize", "code", "review.md, verdict.json, job results", "post review, set labels, write summary",
+     "call a model (no API key)", GREEN),
+    ("maintainer", "human", "issue, PR, review, artifacts", "merge or close", "push to main (ruleset requires a PR)", YELLOW),
+]
+y = 40
+x = 20
+for name, w in cols:
+    wh.v(f"<b>{name}</b>", x, y, w, 30, "rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fontSize=12;" + GREY)
+    x += w
+for r in rows:
+    y += 30 if y == 40 else 64
+    x = 20
+    for i, (_, w) in enumerate(cols):
+        style = "rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontSize=12;"
+        style += r[5] if i < 2 else "fillColor=#ffffff;strokeColor=#cccccc;"
+        wh.v(("<b>%s</b>" % r[i]) if i == 0 else r[i], x, y, w, 64, style)
+        x += w
+save(f"{OUT}/workflow-architecture.drawio", [jg, sm, wh])
+print("wrote workflow-architecture.drawio (3 pages)")

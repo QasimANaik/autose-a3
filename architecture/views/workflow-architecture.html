@@ -1,0 +1,320 @@
+<title>AutoSE Workflow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; diagrams break out wider and scroll sideways on phones. */
+:root {
+  --bg: #f5f7fa; --surface: #ffffff; --fg: #1a2230; --muted: #5a6577; --line: #c6cfdb;
+  --agent-f: #e7efff; --agent-s: #2f5fbf;
+  --rev-f: #fdeae7; --rev-s: #b0412f;
+  --code-f: #ecf4ee; --code-s: #3f7a4a;
+  --human-f: #fff1d6; --human-s: #a9701a;
+  --font-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #171c24; --fg: #e5e9ef; --muted: #9ba5b4; --line: #364152;
+    --agent-f: #172540; --agent-s: #7aa2f2;
+    --rev-f: #3a1c19; --rev-s: #ec8a7c;
+    --code-f: #162619; --code-s: #82bd8c;
+    --human-f: #33270e; --human-s: #e6ac48;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #171c24; --fg: #e5e9ef; --muted: #9ba5b4; --line: #364152;
+  --agent-f: #172540; --agent-s: #7aa2f2;
+  --rev-f: #3a1c19; --rev-s: #ec8a7c;
+  --code-f: #162619; --code-s: #82bd8c;
+  --human-f: #33270e; --human-s: #e6ac48;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1140px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+header { display: grid; gap: 12px; max-width: 72ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { color: var(--muted); font-size: 16px; }
+code, .mono { font-family: var(--font-mono); font-size: .9em; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 16px; height: 12px; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+.sw.agent { background: var(--agent-f); border-color: var(--agent-s); }
+.sw.rev { background: var(--rev-f); border-color: var(--rev-s); }
+.sw.code { background: var(--code-f); border-color: var(--code-s); }
+.sw.human { background: var(--human-f); border-color: var(--human-s); }
+section { display: grid; gap: 14px; min-width: 0; }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--fg); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+/* SVG classes (styled from the page, so the drawing follows the theme) */
+.b-agent { fill: var(--agent-f); stroke: var(--agent-s); stroke-width: 1.5; }
+.b-rev { fill: var(--rev-f); stroke: var(--rev-s); stroke-width: 1.5; }
+.b-code { fill: var(--code-f); stroke: var(--code-s); stroke-width: 1.5; }
+.b-human { fill: var(--human-f); stroke: var(--human-s); stroke-width: 1.5; }
+.t-name { font: 600 15px var(--font-body); fill: currentColor; }
+.t-role { font: 400 13px var(--font-body); fill: currentColor; }
+.t-mono { font: 400 12px var(--font-mono); fill: var(--muted); }
+.t-edge { font: 500 12px var(--font-mono); fill: currentColor; }
+.t-note { font: 400 12.5px var(--font-body); fill: var(--muted); }
+.t-warn { font: 500 12px var(--font-mono); fill: var(--rev-s); }
+.e { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.e-back { stroke: var(--rev-s); stroke-width: 1.4; fill: none; }
+.e-ok { stroke: var(--code-s); stroke-width: 1.4; fill: none; }
+.e-dash { stroke: var(--muted); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+.label-bg { fill: var(--surface); }
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-mono); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid; }
+.pill.agent { background: var(--agent-f); border-color: var(--agent-s); }
+.pill.rev { background: var(--rev-f); border-color: var(--rev-s); }
+.pill.code { background: var(--code-f); border-color: var(--code-s); }
+.pill.human { background: var(--human-f); border-color: var(--human-s); }
+footer { color: var(--muted); font-size: 13px; }
+a { color: var(--agent-s); }
+a:focus-visible { outline: 2px solid var(--agent-s); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">QasimANaik/mistune @ f7ec702 · .github/workflows/autose.yml</div>
+    <h1>AutoSE workflow: from labelled issue to reviewed pull request</h1>
+    <p class="lede">A maintainer labels an issue <code>autose</code> (or comments <code>/autose</code>). Builder agents write the spec, design, code and tests in a fresh context for each stage. Plain code checks every stage and opens the pull request. A separate reviewer agent in a read-only job reviews it. A person decides whether to merge.</p>
+    <div class="legend" aria-label="Legend">
+      <span><i class="sw agent"></i>builder agent (Gemini Flash)</span>
+      <span><i class="sw rev"></i>reviewer agent (Gemini Pro)</span>
+      <span><i class="sw code"></i>deterministic code, no LLM</span>
+      <span><i class="sw human"></i>human decision</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>1 · The Actions job graph</h2>
+    <p>GitHub Actions jobs cannot loop, so the two review rounds are separate jobs in a fixed graph. Each box shows the token permissions that job gets; the workflow default is <code>permissions: {}</code>.</p>
+    <figure>
+      <div class="scroll">
+        <svg viewBox="0 0 1100 520" role="img" aria-label="Job graph: gate, build, review-1, publish-1; if changes are requested, rework-1, review-2, publish-2; finalize always runs and hands the PR to a human. Reviewer jobs are read-only.">
+          <defs>
+            <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ah1r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="b-rev" style="stroke:none;fill:var(--rev-s)"/></marker>
+            <marker id="ah1g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--code-s)"/></marker>
+          </defs>
+
+          <!-- review-only path (seeded PRs) -->
+          <path class="e-dash" d="M120,60 V32 H680 V56" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="400" y="24" text-anchor="middle">mode=review · "/autose review" on a PR</text>
+
+          <!-- row 1 -->
+          <rect class="b-code" x="20" y="60" width="200" height="92" rx="8"/>
+          <text class="t-name" x="34" y="86">gate</text>
+          <text class="t-role" x="34" y="106">who triggered? which mode?</text>
+          <text class="t-mono" x="34" y="126">issues: write</text>
+          <text class="t-mono" x="34" y="142">no LLM · no secrets</text>
+
+          <rect class="b-agent" x="300" y="60" width="200" height="92" rx="8"/>
+          <text class="t-name" x="314" y="86">build · stages 1–5</text>
+          <text class="t-role" x="314" y="106">4 builder calls + checks</text>
+          <text class="t-mono" x="314" y="126">contents, PRs, issues,</text>
+          <text class="t-mono" x="314" y="142">actions: write</text>
+
+          <rect class="b-rev" x="580" y="60" width="200" height="92" rx="8"/>
+          <text class="t-name" x="594" y="86">review-1</text>
+          <text class="t-role" x="594" y="106">reviewer agent, fresh</text>
+          <text class="t-mono" x="594" y="126">contents: read</text>
+          <text class="t-mono" x="594" y="142">pull-requests: read</text>
+
+          <rect class="b-code" x="860" y="60" width="200" height="92" rx="8"/>
+          <text class="t-name" x="874" y="86">publish-1</text>
+          <text class="t-role" x="874" y="106">posts review, sets label</text>
+          <text class="t-mono" x="874" y="126">pull-requests: write</text>
+          <text class="t-mono" x="874" y="142">no LLM · no API key</text>
+
+          <line class="e" x1="220" y1="106" x2="296" y2="106" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="260" y="98" text-anchor="middle">build</text>
+          <line class="e" x1="500" y1="106" x2="576" y2="106" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="540" y="98" text-anchor="middle">PR #</text>
+          <line class="e" x1="780" y1="106" x2="856" y2="106" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="820" y="98" text-anchor="middle">verdict</text>
+
+          <!-- changes requested -> rework -->
+          <line class="e-back" x1="1010" y1="152" x2="1010" y2="276" marker-end="url(#ah1r)"/>
+          <text class="t-warn" x="1018" y="206">changes</text>
+          <text class="t-warn" x="1018" y="221">requested</text>
+
+          <!-- approved -> finalize -->
+          <path class="e-ok" d="M900,152 V218 H120 V276" marker-end="url(#ah1g)"/>
+          <text class="t-edge" x="510" y="211" text-anchor="middle">approved in round 1</text>
+
+          <!-- row 2 (right to left) -->
+          <rect class="b-agent" x="860" y="280" width="200" height="92" rx="8"/>
+          <text class="t-name" x="874" y="306">rework-1</text>
+          <text class="t-role" x="874" y="326">code issue → stage 3</text>
+          <text class="t-role" x="874" y="344">approach issue → stage 2</text>
+          <text class="t-mono" x="874" y="362">then 4 → 5 again</text>
+
+          <rect class="b-rev" x="580" y="280" width="200" height="92" rx="8"/>
+          <text class="t-name" x="594" y="306">review-2</text>
+          <text class="t-role" x="594" y="326">new reviewer call</text>
+          <text class="t-mono" x="594" y="346">contents: read</text>
+          <text class="t-mono" x="594" y="362">pull-requests: read</text>
+
+          <rect class="b-code" x="300" y="280" width="200" height="92" rx="8"/>
+          <text class="t-name" x="314" y="306">publish-2</text>
+          <text class="t-role" x="314" y="326">posts final review</text>
+          <text class="t-mono" x="314" y="346">pull-requests: write</text>
+          <text class="t-mono" x="314" y="362">no LLM · no API key</text>
+
+          <rect class="b-code" x="20" y="280" width="200" height="92" rx="8"/>
+          <text class="t-name" x="34" y="306">finalize</text>
+          <text class="t-role" x="34" y="326">summary comment + label</text>
+          <text class="t-mono" x="34" y="346">issues, PRs: write</text>
+          <text class="t-mono" x="34" y="362">always runs</text>
+
+          <line class="e" x1="860" y1="326" x2="784" y2="326" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="822" y="318" text-anchor="middle">push</text>
+          <line class="e" x1="580" y1="326" x2="504" y2="326" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="542" y="318" text-anchor="middle">verdict</text>
+          <line class="e" x1="300" y1="326" x2="224" y2="326" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="262" y="318" text-anchor="middle">final</text>
+
+          <!-- human -->
+          <rect class="b-human" x="20" y="432" width="200" height="60" rx="8"/>
+          <text class="t-name" x="34" y="458">Human</text>
+          <text class="t-role" x="34" y="478">merge or close the PR</text>
+          <line class="e" x1="120" y1="372" x2="120" y2="428" marker-end="url(#ah1)"/>
+          <text class="t-edge" x="130" y="404">done | needs-human | failed</text>
+
+          <text class="t-note" x="300" y="452">There is no edge out of review-2: two review rounds is a hard limit.</text>
+          <text class="t-note" x="300" y="472">If round 2 still requests changes, finalize labels the issue autose:needs-human.</text>
+          <text class="t-note" x="300" y="492">The bot never calls merge, and CODEOWNERS means a bot approval cannot satisfy the ruleset.</text>
+        </svg>
+      </div>
+      <figcaption>Write access lives only in the jobs that run code (build, rework) or post results (publish, finalize). The reviewer jobs get a read-only token and never download the build job's artifacts.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>2 · Inside the build job: stages, checks and loop-backs</h2>
+    <p><code>orchestrator.py</code> is a state machine. Each stage is a new <code>gemini -p</code> call that only gets the artifacts it needs. After every call, code runs the check, reverts files the stage was not allowed to touch, and decides what runs next.</p>
+    <figure>
+      <div class="scroll">
+        <svg viewBox="0 0 1100 330" role="img" aria-label="Five stages left to right. Tests failing loop back to implementation up to twice, then to design once; CI failing loops back to implementation once. Every other failure retries then stops.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ah2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--rev-s)"/></marker>
+          </defs>
+
+          <!-- loop-backs above -->
+          <path class="e-back" d="M780,130 V58 H330 V126" marker-end="url(#ah2r)"/>
+          <text class="t-warn" x="555" y="50" text-anchor="middle">tests still fail · redesign ≤1</text>
+          <path class="e-back" d="M720,130 V100 H600 V126" marker-end="url(#ah2r)"/>
+          <text class="t-warn" x="660" y="93" text-anchor="middle">tests fail · ≤2</text>
+
+          <!-- stages -->
+          <rect class="b-agent" x="20" y="130" width="170" height="124" rx="8"/>
+          <text class="t-name" x="32" y="154">1 · Requirements</text>
+          <text class="t-role" x="32" y="173">agent + A1 skill</text>
+          <text class="t-mono" x="32" y="194">→ spec.md</text>
+          <text class="t-note" x="32" y="213">ACs in Given/When/Then,</text>
+          <text class="t-note" x="32" y="229">no vague words</text>
+          <text class="t-warn" x="32" y="247">retry ≤1, then STOP</text>
+
+          <rect class="b-agent" x="242" y="130" width="170" height="124" rx="8"/>
+          <text class="t-name" x="254" y="154">2 · Design</text>
+          <text class="t-role" x="254" y="173">agent + ARCHITECTURE.md</text>
+          <text class="t-mono" x="254" y="194">→ design.md</text>
+          <text class="t-note" x="254" y="213">named files + functions</text>
+          <text class="t-note" x="254" y="229">exist (AST)</text>
+          <text class="t-warn" x="254" y="247">retry ≤1, then STOP</text>
+
+          <rect class="b-agent" x="464" y="130" width="170" height="124" rx="8"/>
+          <text class="t-name" x="476" y="154">3 · Implement</text>
+          <text class="t-role" x="476" y="173">may edit src/ only</text>
+          <text class="t-mono" x="476" y="194">→ diff.patch</text>
+          <text class="t-note" x="476" y="213">import, ruff,</text>
+          <text class="t-note" x="476" y="229">strict mypy</text>
+          <text class="t-warn" x="476" y="247">retry ≤2, then STOP</text>
+
+          <rect class="b-agent" x="686" y="130" width="170" height="124" rx="8"/>
+          <text class="t-name" x="698" y="154">4 · Test</text>
+          <text class="t-role" x="698" y="173">may edit tests/ only</text>
+          <text class="t-mono" x="698" y="194">→ test_report.md</text>
+          <text class="t-note" x="698" y="213">full pytest green,</text>
+          <text class="t-note" x="698" y="229">every AC has a test</text>
+          <text class="t-warn" x="698" y="247">loops above, then STOP</text>
+
+          <rect class="b-code" x="908" y="130" width="170" height="124" rx="8"/>
+          <text class="t-name" x="920" y="154">5 · Release</text>
+          <text class="t-role" x="920" y="173">code + gh CLI</text>
+          <text class="t-mono" x="920" y="194">→ pr.md + PR link</text>
+          <text class="t-note" x="920" y="213">PR open, tests.yml</text>
+          <text class="t-note" x="920" y="229">run green</text>
+          <text class="t-warn" x="920" y="247">loop below, then STOP</text>
+
+          <line class="e" x1="190" y1="192" x2="238" y2="192" marker-end="url(#ah2)"/>
+          <text class="t-edge" x="215" y="184" text-anchor="middle">pass</text>
+          <line class="e" x1="412" y1="192" x2="460" y2="192" marker-end="url(#ah2)"/>
+          <text class="t-edge" x="437" y="184" text-anchor="middle">pass</text>
+          <line class="e" x1="634" y1="192" x2="682" y2="192" marker-end="url(#ah2)"/>
+          <text class="t-edge" x="659" y="184" text-anchor="middle">pass</text>
+          <line class="e" x1="856" y1="192" x2="904" y2="192" marker-end="url(#ah2)"/>
+          <text class="t-edge" x="881" y="184" text-anchor="middle">pass</text>
+
+          <!-- CI loop-back below -->
+          <path class="e-back" d="M960,254 V294 H560 V258" marker-end="url(#ah2r)"/>
+          <text class="t-warn" x="760" y="314" text-anchor="middle">CI fails · ≤1, with the CI log</text>
+        </svg>
+      </div>
+      <figcaption>Every red arrow is chosen by code from a check result, never by an agent. On STOP the reason is appended to that stage's artifact, the run ends, and finalize labels the issue <code>autose:failed</code>. A per-run token budget and per-call turn limits stop runaway agents.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>3 · Who holds what</h2>
+    <p>Credentials and tools differ by component. An agent never receives a GitHub token, so even if the issue text hijacks it, it cannot push, comment or approve.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Component</th><th>Kind</th><th>Sees</th><th>Can</th><th>Cannot</th></tr></thead>
+        <tbody>
+          <tr><td>gate.py</td><td><span class="pill code">code</span></td><td>event payload (read from file, never put into a shell command)</td><td>accept OWNER / MEMBER / COLLABORATOR, label, comment</td><td>run when the trigger comes from an untrusted user or a bot</td></tr>
+          <tr><td>orchestrator.py</td><td><span class="pill code">code</span></td><td>issue, all artifacts, check results</td><td>hold <code>GH_TOKEN</code>, commit, push the branch, open the PR, dispatch CI</td><td>merge (it never calls merge)</td></tr>
+          <tr><td>builder agents</td><td><span class="pill agent">gemini -p</span></td><td>only that stage's inputs (issue wrapped as untrusted text, spec, design, diff)</td><td>read and edit files, run <code>uv run pytest / ruff / mypy / python</code></td><td>use the network, git push or commit, <code>gh</code>, edit outside their folder (reverted in code)</td></tr>
+          <tr><td>reviewer agent</td><td><span class="pill rev">gemini -p</span></td><td>issue, PR diff, PR-head checkout only</td><td>read code, run tests and its own probes</td><td>edit files, push, see the spec, design, test report or builder transcripts</td></tr>
+          <tr><td>publish / finalize</td><td><span class="pill code">code</span></td><td>review.md, verdict.json, job results</td><td>post the review, set labels, write the summary</td><td>call a model (no API key in these jobs)</td></tr>
+          <tr><td>maintainer</td><td><span class="pill human">human</span></td><td>issue, PR, review, all artifacts</td><td>merge or close</td><td>push to main (the ruleset requires a PR)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · Stage map</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>#</th><th>Stage</th><th>Agent</th><th>Artifact</th><th>Check before moving on</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Requirements</td><td>builder + A1 <code>requirements-spec</code> skill</td><td><code>spec.md</code></td><td>every AC has an id and Given/When/Then, with no vague words; the A1 validator result is recorded</td></tr>
+          <tr><td>2</td><td>Design</td><td>builder + <code>ARCHITECTURE.md</code></td><td><code>design.md</code></td><td>every named file and function exists (parsed with <code>ast</code>)</td></tr>
+          <tr><td>3</td><td>Implementation</td><td>builder (only <code>src/</code> is kept)</td><td><code>diff.patch</code></td><td>imports, ruff and strict mypy pass</td></tr>
+          <tr><td>4</td><td>Testing</td><td>builder (only <code>tests/</code> is kept)</td><td><code>test_report.md</code></td><td>full suite green and every AC id covered by a test</td></tr>
+          <tr><td>5</td><td>Release</td><td>orchestrator (no LLM)</td><td><code>pr.md</code> + PR link</td><td>PR open and the <code>tests.yml</code> run green</td></tr>
+          <tr><td>6</td><td>Review</td><td>independent reviewer (Pro, read-only job)</td><td><code>review.md</code> + <code>verdict.json</code></td><td>approve, or two rounds used; findings without evidence are discarded</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Source: <a href="https://github.com/QasimANaik/mistune/pull/6">QasimANaik/mistune PR #6</a> · design and ADRs: <a href="https://github.com/QasimANaik/autose-a3">QasimANaik/autose-a3</a>. Editable draw.io versions are in <code>architecture/views/</code>.</footer>
+</div>
