@@ -1,0 +1,58 @@
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+__________________________ test_inline_link_gets_rel ___________________________
+
+    def test_inline_link_gets_rel():
+>       html = _md(link_rel="nofollow ugc")("[site](https://example.com)")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_hidden_issue3.py:19: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+kw = {'link_rel': 'nofollow ugc'}
+
+    def _md(**kw):
+>       return mistune.create_markdown(renderer=mistune.HTMLRenderer(**kw), plugins=["url"])
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HTMLRenderer.__init__() got an unexpected keyword argument 'link_rel'
+
+tests/test_hidden_issue3.py:8: TypeError
+_____________________ test_autolink_and_plain_url_get_rel ______________________
+
+    def test_autolink_and_plain_url_get_rel():
+>       md = _md(link_rel="nofollow")
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_hidden_issue3.py:25: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+kw = {'link_rel': 'nofollow'}
+
+    def _md(**kw):
+>       return mistune.create_markdown(renderer=mistune.HTMLRenderer(**kw), plugins=["url"])
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HTMLRenderer.__init__() got an unexpected keyword argument 'link_rel'
+
+tests/test_hidden_issue3.py:8: TypeError
+____________________________ test_images_unaffected ____________________________
+
+    def test_images_unaffected():
+>       html = _md(link_rel="nofollow")("![logo](https://example.com/a.png)")
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_hidden_issue3.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+kw = {'link_rel': 'nofollow'}
+
+    def _md(**kw):
+>       return mistune.create_markdown(renderer=mistune.HTMLRenderer(**kw), plugins=["url"])
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HTMLRenderer.__init__() got an unexpected keyword argument 'link_rel'
+
+tests/test_hidden_issue3.py:8: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue3.py::test_inline_link_gets_rel - TypeError: HT...
+FAILED tests/test_hidden_issue3.py::test_autolink_and_plain_url_get_rel - Typ...
+FAILED tests/test_hidden_issue3.py::test_images_unaffected - TypeError: HTMLR...
+3 failed, 1 passed in 0.08s

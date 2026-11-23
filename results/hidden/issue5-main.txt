@@ -1,0 +1,26 @@
+F...                                                                     [100%]
+=================================== FAILURES ===================================
+____________________ test_no_block_element_inside_paragraph ____________________
+
+    def test_no_block_element_inside_paragraph():
+        html = md(SRC)
+        for p in re.findall(r"<p>.*?</p>", html, re.S):
+>           assert "<div" not in p, html
+E           AssertionError: <p>The famous relation <div class="math">$$
+E             E=mc^2
+E             $$</div>
+E              changed physics.</p>
+E             
+E           assert '<div' not in '<p>The famo...physics.</p>'
+E             
+E             '<div' is contained here:
+E               <p>The famous relation <div class="math">$$
+E             ?                        ++++
+E               E=mc^2
+E               $$</div>
+E                changed physics.</p>
+
+tests/test_hidden_issue5.py:18: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue5.py::test_no_block_element_inside_paragraph - ...
+1 failed, 3 passed in 0.07s

@@ -1,0 +1,43 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+____________________ test_short_row_padded_with_empty_cell _____________________
+
+    def test_short_row_padded_with_empty_cell():
+        html = md("| Name | Role |\n|------|------|\n| Ana |")
+>       assert "<table>" in html
+E       AssertionError: assert '<table>' in '<p>| Name | Role |\n|------|------|\n| Ana |</p>\n'
+
+tests/test_hidden_issue1.py:11: AssertionError
+__________________________ test_extra_cell_is_dropped __________________________
+
+    def test_extra_cell_is_dropped():
+        html = md("| Name | Role |\n|------|------|\n| Ana | Dev | extra |")
+>       assert "<table>" in html
+E       AssertionError: assert '<table>' in '<p>| Name | Role |\n|------|------|\n| Ana | Dev | extra |</p>\n'
+
+tests/test_hidden_issue1.py:19: AssertionError
+______________________ test_one_bad_row_keeps_whole_table ______________________
+
+    def test_one_bad_row_keeps_whole_table():
+        src = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 |\n| 5 | 6 |"
+        html = md(src)
+>       assert html.count("<table>") == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of str object at 0x79940c7feb50>('<table>')
+E        +    where <built-in method count of str object at 0x79940c7feb50> = '<p>| a | b |\n|---|---|\n| 1 | 2 |\n| 3 |\n| 5 | 6 |</p>\n'.count
+
+tests/test_hidden_issue1.py:27: AssertionError
+___________________ test_padded_cell_keeps_column_alignment ____________________
+
+    def test_padded_cell_keeps_column_alignment():
+        html = md("| a | b |\n|:--|--:|\n| x |")
+>       assert '<td style="text-align:right"></td>' in html
+E       assert '<td style="text-align:right"></td>' in '<p>| a | b |\n|:--|--:|\n| x |</p>\n'
+
+tests/test_hidden_issue1.py:34: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue1.py::test_short_row_padded_with_empty_cell - A...
+FAILED tests/test_hidden_issue1.py::test_extra_cell_is_dropped - AssertionErr...
+FAILED tests/test_hidden_issue1.py::test_one_bad_row_keeps_whole_table - Asse...
+FAILED tests/test_hidden_issue1.py::test_padded_cell_keeps_column_alignment
+4 failed in 0.08s

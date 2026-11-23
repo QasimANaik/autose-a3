@@ -1,0 +1,31 @@
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+______________________ test_ordered_uses_ol_at_top_level _______________________
+
+    def test_ordered_uses_ol_at_top_level():
+>       html = render_toc_ul(ITEMS, ordered=True)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: render_toc_ul() got an unexpected keyword argument 'ordered'
+
+tests/test_hidden_issue4.py:8: TypeError
+______________________ test_ordered_nested_levels_use_ol _______________________
+
+    def test_ordered_nested_levels_use_ol():
+>       html = render_toc_ul(ITEMS, ordered=True)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: render_toc_ul() got an unexpected keyword argument 'ordered'
+
+tests/test_hidden_issue4.py:14: TypeError
+___________________ test_ordered_same_structure_as_unordered ___________________
+
+    def test_ordered_same_structure_as_unordered():
+>       a = render_toc_ul(ITEMS, ordered=True)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: render_toc_ul() got an unexpected keyword argument 'ordered'
+
+tests/test_hidden_issue4.py:20: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue4.py::test_ordered_uses_ol_at_top_level - TypeE...
+FAILED tests/test_hidden_issue4.py::test_ordered_nested_levels_use_ol - TypeE...
+FAILED tests/test_hidden_issue4.py::test_ordered_same_structure_as_unordered
+3 failed, 1 passed in 0.08s

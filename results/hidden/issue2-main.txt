@@ -1,0 +1,31 @@
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+________________________ test_balanced_parentheses_kept ________________________
+
+    def test_balanced_parentheses_kept():
+        html = md(f"see {WIKI} for details")
+>       assert f'href="{WIKI}"' in html
+E       assert 'href="https://en.wikipedia.org/wiki/Python_(programming_language)"' in '<p>see <a href="https://en.wikipedia.org/wiki/Python_(programming_language">https://en.wikipedia.org/wiki/Python_(programming_language</a>) for details</p>\n'
+
+tests/test_hidden_issue2.py:10: AssertionError
+_____________________ test_trailing_question_mark_excluded _____________________
+
+    def test_trailing_question_mark_excluded():
+        html = md("did you try https://example.com/docs?")
+>       assert 'href="https://example.com/docs"' in html
+E       assert 'href="https://example.com/docs"' in '<p>did you try <a href="https://example.com/docs?">https://example.com/docs?</a></p>\n'
+
+tests/test_hidden_issue2.py:16: AssertionError
+______________________ test_trailing_exclamation_excluded ______________________
+
+    def test_trailing_exclamation_excluded():
+        html = md("look at https://example.com/new!")
+>       assert 'href="https://example.com/new"' in html
+E       assert 'href="https://example.com/new"' in '<p>look at <a href="https://example.com/new!">https://example.com/new!</a></p>\n'
+
+tests/test_hidden_issue2.py:22: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue2.py::test_balanced_parentheses_kept - assert '...
+FAILED tests/test_hidden_issue2.py::test_trailing_question_mark_excluded - as...
+FAILED tests/test_hidden_issue2.py::test_trailing_exclamation_excluded - asse...
+3 failed, 1 passed in 0.07s
