@@ -508,3 +508,15 @@ Record with OBS / `simplescreenrecorder`. You can speed up the waiting parts (an
 8. CI runs ruff + mypy; agents often forget type hints → include them in the build check.
 9. Script injection: never write `${{ github.event.issue.body }}` inside `run:`; use `env:`.
 10. Cost: set budgets in `config.yaml` and fail the run when it goes over, and say so in the artifact.
+
+---
+
+## 11. Change log
+
+- **2026-11-23: rebuilt on LangGraph** (following the maintainers' SpecBridge architecture, `architecture.drawio`).
+  Stages 1–3 stay sequential agent calls; stage 4 is an orchestrator node that `Send`s parallel
+  test-worker subgraphs (one per AC group, own git worktree) plus an e2e worker, merged by a code node.
+  Review is a separate LangGraph graph in its own read-only job. SQLite checkpoints are carried as artifacts so
+  a re-run job resumes. ADR-001/002/004 superseded by ADR-011/012/013. Code: fork PR #6 (`autose/graph.py`,
+  `nodes.py`, `workers.py`, `review.py`, `run.py`). Diagram: `architecture/views/autose-workflow.drawio`.
+  Local simulation evidence: `experiment/scripts/sim/README.md`.
