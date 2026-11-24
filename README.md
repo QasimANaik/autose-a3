@@ -11,7 +11,7 @@ which an independent reviewer agent then reviews. A human always makes the merge
 | **Pinned upstream commit** | `lepture/mistune` @ `f7ec702edfc1ad5579a76f881238841af266d93c` |
 | **Workflow on the fork** | [`.github/workflows/autose.yml`](https://github.com/QasimANaik/mistune/blob/main/.github/workflows/autose.yml) + [`autose/`](https://github.com/QasimANaik/mistune/tree/main/autose) (copy in [`workflow/`](workflow/)) |
 | **Report** | [`report.pdf`](report.pdf) (source: [`report/report.html`](report/report.html)) |
-| **Demo video** | [`demo.mp4`](demo.mp4): 4 min 55 s, recorded 15 min 40 s and sped up 3.2× evenly (no audio). It follows the issue #4 run [45440832883](https://github.com/QasimANaik/mistune/actions/runs/45440832883), which stopped at release on a PyPy-only CI failure. The complete run ending in a posted review is [45354704591](https://github.com/QasimANaik/mistune/actions/runs/45354704591) → [PR #11 review](https://github.com/QasimANaik/mistune/pull/11#pullrequestreview-6035868107) |
+| **Demo video** | [Google Drive](https://drive.google.com/file/d/1z8QktEOZSu0dd_tumDdRDdlcazEnglZX/view?usp=sharing) (link also in [`demo.txt`](demo.txt)): 4 min 55 s, recorded 15 min 40 s and sped up 3.2× evenly (no audio). It follows the issue #4 run [45440832883](https://github.com/QasimANaik/mistune/actions/runs/45440832883), which stopped at release on a PyPy-only CI failure. The complete run ending in a posted review is [45354704591](https://github.com/QasimANaik/mistune/actions/runs/45354704591) → [PR #11 review](https://github.com/QasimANaik/mistune/pull/11#pullrequestreview-6035868107) |
 | **All runs, PRs and reviews** | [`results/runs.md`](results/runs.md), [`results/results.csv`](results/results.csv) |
 
 ## Models and runtime
@@ -67,7 +67,7 @@ TODO (author): note the prepaid amount and add a screenshot of the billing page 
 
 ```
 README.md            this file
-demo.mp4             demo video (≤ 5 min)
+demo.txt             link to the demo video (≤ 5 min, Google Drive)
 report.pdf           the report (≤ 8 pages + appendices); source in report/ (with the original PLAN.md)
 architecture/
   views/             component view, sequence view (real run), stage map: .drawio + .svg/.md; generators in views/src/
