@@ -1,0 +1,13 @@
+F...                                                                     [100%]
+=================================== FAILURES ===================================
+________________________ test_balanced_parentheses_kept ________________________
+
+    def test_balanced_parentheses_kept():
+        html = md(f"see {WIKI} for details")
+>       assert f'href="{WIKI}"' in html
+E       assert 'href="https://en.wikipedia.org/wiki/Python_(programming_language)"' in '<p>see <a href="https://en.wikipedia.org/wiki/Python_(programming_language">https://en.wikipedia.org/wiki/Python_(programming_language</a>) for details</p>\n'
+
+tests/test_hidden_issue2.py:10: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue2.py::test_balanced_parentheses_kept - assert '...
+1 failed, 3 passed in 0.09s

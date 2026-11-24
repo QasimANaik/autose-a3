@@ -1,0 +1,38 @@
+diff --git a/src/mistune/renderers/html.py b/src/mistune/renderers/html.py
+index 09e7b04..f0db0ea 100644
+--- a/src/mistune/renderers/html.py
++++ b/src/mistune/renderers/html.py
+@@ -124,10 +124,14 @@ class HTMLRenderer(BaseRenderer):
+         return "<strong>" + text + "</strong>"
+ 
+     def link(self, text: str, url: str, title: Optional[str] = None) -> str:
++        trailing = ""
++        if url.endswith(("?", "!")) and text.endswith(url[-1]):
++            # do not swallow a question/exclamation mark that ends the sentence
++            trailing, url, text = url[-1], url[:-1], text[:-1]
+         attrs: Dict[str, object] = {"href": self.sanitize_url(url)}
+         if title:
+             attrs["title"] = title
+-        return "<a" + self.render_attrs(attrs) + ">" + text + "</a>"
++        return "<a" + self.render_attrs(attrs) + ">" + text + "</a>" + trailing
+ 
+     def image(self, text: str, url: str, title: Optional[str] = None) -> str:
+         alt = striptags(text)
+diff --git a/tests/test_url_punctuation.py b/tests/test_url_punctuation.py
+new file mode 100644
+index 0000000..d01834c
+--- /dev/null
++++ b/tests/test_url_punctuation.py
+@@ -0,0 +1,12 @@
++import mistune
++
++md = mistune.create_markdown(plugins=["url"])
++
++
++def test_trailing_question_mark_not_in_link():
++    assert md("did you try https://example.com/docs?") == (
++        '<p>did you try <a href="https://example.com/docs">https://example.com/docs</a>?</p>\n')
++
++
++def test_trailing_exclamation_not_in_link():
++    assert '</a>!' in md("look at https://example.com/new!")
