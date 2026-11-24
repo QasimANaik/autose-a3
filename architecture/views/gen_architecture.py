@@ -142,7 +142,7 @@ design = v("<b>design</b> - stage 2<br>reads ARCHITECTURE.md + code → <b>desig
            755, 170, 190, 150, AI)
 impl = v("<b>implement</b> - stage 3<br>edits <b>src/</b> only (other edits reverted) → <b>diff.patch</b>. Check "
          "(code): import, ruff, strict mypy; commit" + tag("implement"), 970, 170, 190, 150, AI)
-orch = v("<b>orchestrator</b> (code) - stage 4<br>group ACs per requirement (max 4 groups); token budget split with "
+orch = v("<b>orchestrator</b> (code) - stage 4<br>group ACs per requirement (max 2 groups); token budget split with "
          "20% reserve; <i>Send</i> one worker per group (+ e2e if 2+ groups)" + FREE, 1290, 160, 190, 150, CODE)
 v("", 1270, 335, 190, 135, SUB + "opacity=45;")
 v("", 1280, 345, 190, 135, SUB + "opacity=70;")
@@ -277,7 +277,7 @@ v("solid = normal edge · <font color='#7F00FF'>dashed purple = conditional / Se
 # ---------------------------------------------------------------- agent call + external systems
 v("<b>Every agent call</b> (agent.py): fresh headless <i>gemini -p</i> with an empty context; temp HOME; env = PATH, "
   "HOME, GEMINI_API_KEY only (no GitHub token); admin policy file allows read_file, glob, grep, write_file, replace, "
-  "shell uv run pytest | ruff | mypy | python; denies web, git push / commit, gh, curl; 60 turns, 1200 s. A failure "
+  "shell uv run pytest | ruff | mypy | python; denies web, git push / commit, gh, curl; 30 turns, 1200 s; long shell output summarised (summarizeToolOutput). A failure "
   "before any work (quota, retired model) is retried once on the fallback model, then stops the run with the reason.",
   230, 1200, 1270, 60, TOOL.replace("rounded=1", "rounded=0") + "align=left;spacingLeft=8;")
 v("<b>Gemini API</b> (secret GEMINI_API_KEY)<br>all agent nodes: gemini-3.5-flash-lite<br>fallback: "

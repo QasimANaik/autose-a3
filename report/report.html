@@ -119,7 +119,7 @@ a { color: #2f5fbf; text-decoration: none; }
 <text x="14" y="496" class="s"><tspan font-weight="bold">Every agent node</tspan> = one fresh headless <tspan font-family="monospace">gemini -p</tspan> call, model gemini-3.5-flash-lite (fallback 3.1-flash-lite).</text>
 <text x="14" y="512" class="s">Env: PATH, HOME, GEMINI_API_KEY only (no GitHub token). Admin policy file: read / glob / grep / write / replace +</text>
 <text x="14" y="528" class="s"><tspan font-family="monospace">uv run pytest|ruff|mypy|python</tspan>; web, git push/commit, gh, curl denied. Edits outside the stage's folder</text>
-<text x="14" y="544" class="s">are reverted by code. 60 turns and 1200 s per call; 8M tokens per job.</text>
+<text x="14" y="544" class="s">are reverted by code. 30 turns, 1200 s per call; long shell output summarised; 8M tokens per job.</text>
 </svg>
 <figcaption><b>Figure 1. Component view.</b> Green = code only, blue = agent call, purple = parallel subgraph, red = writes to GitHub, yellow = trigger / human. Dashed red = loop-backs chosen by code; dashed purple = conditional / <code>Send</code>. Full editable versions (every node, its function and its cost): <code>architecture/views/architecture.drawio</code>.</figcaption>
 </figure>
@@ -311,7 +311,7 @@ The open risk is correlated blind spots between builder and reviewer. Experiment
 <ul>
 <li><b>Target:</b> fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> pinned at upstream <code>f7ec702edfc1ad5579a76f881238841af266d93c</code>. Workflow and agent code: <code>workflow/</code> (copy of <code>.github/workflows/autose.yml</code> and <code>autose/</code>), with the history of PRs #6–#10 in the fork.</li>
 <li><b>Branch protection:</b> ruleset <code>protect-main</code> (no deletion or force push; a PR with 1 code-owner approval is required; admin bypass for pull requests only). CODEOWNERS = the author, so a bot approval can never satisfy the merge rule. <i>Screenshot: appendix image (to add).</i></li>
-<li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 60-turn limit and a 1200 s limit per agent call. <i>Budget alert screenshot: appendix image (to add).</i></li>
+<li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 30-turn limit (60 before PR #12), summarised shell output and a 1200 s limit per agent call. <i>Budget alert screenshot: appendix image (to add).</i></li>
 <li><b>Local evidence:</b> <code>experiment/scripts/sim/</code> replays the graph with a fake model: happy path, build retry, crash and resume, review judge, rework, clarify, model outage, and test dispute (a replay of run 6 with its real diff).</li>
 <li><b>AI use:</b> the workflow code, prompts, draw.io generators, simulations and the drafts of this report were written with the help of an AI coding assistant (Claude Code) and reviewed by the author. Text marked "✎ draft reasoning" and the "Rationale" sections of the ADRs must be in the author's own words, as the course policy requires.</li>
 </ul>
