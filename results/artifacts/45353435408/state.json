@@ -1,0 +1,99 @@
+{
+  "issue": 4,
+  "variant": "baseline",
+  "mode": "build",
+  "round": "",
+  "issue_data": {
+    "body": "I'm generating a manual with `add_toc_hook` + `render_toc_ul`. Our style guide wants the table of contents numbered (1, 1.1, 1.2, 2 \u2026), which in HTML/CSS means `<ol>` lists, but `render_toc_ul` always produces `<ul>`.\n\nRight now I copy the whole function into my project just to change `ul` to `ol`, and that copy has already drifted from upstream.\n\nProposal: an optional keyword, e.g.\n\n```python\nfrom mistune.toc import render_toc_ul\nhtml = render_toc_ul(state.env[\"toc_items\"], ordered=True)\n```\n\nwhich renders exactly the same structure but with `<ol>` instead of `<ul>` at every nesting level. Without the keyword nothing changes.\n",
+    "number": 4,
+    "title": "render_toc_ul: allow a numbered (ordered) table of contents",
+    "url": "https://github.com/QasimANaik/mistune/issues/4"
+  },
+  "injection_flags": [],
+  "base": "12c06ee73471e3449d4e13c823ca04e6a35359f0",
+  "branch": "autose/issue-4",
+  "patch": "",
+  "acs": {
+    "AC-FR-001-1": "Given a list of TOC items `[(1, \"toc-1\", \"Introduction\"), (2, \"toc-2\", \"Install\")]`, when `render_toc_ul(items, ordered=True)`, then `<ol>\\n<li><a href=\"#toc-1\">Introduction</a></li>\\n<li><a href=\"#toc-2\">Install</a></li>\\n</ol>\\n`.",
+    "AC-FR-001-2": "Given a nested list of TOC items `[(1, \"chap-1\", \"Chapter 1\"), (2, \"sec-1\", \"Section 1.1\")]`, when `render_toc_ul(items, ordered=True)`, then `<ol>\\n<li><a href=\"#chap-1\">Chapter 1</a>\\n<ol>\\n<li><a href=\"#sec-1\">Section 1.1</a></li>\\n</ol>\\n</li>\\n</ol>\\n`.",
+    "AC-FR-002-1": "Given a list of TOC items `[(1, \"toc-1\", \"Introduction\")]`, when `render_toc_ul(items)`, then `<ul>\\n<li><a href=\"#toc-1\">Introduction</a></li>\\n</ul>\\n`.",
+    "AC-FR-002-2": "Given a list of TOC items `[(1, \"toc-1\", \"Introduction\")]`, when `render_toc_ul(items, ordered=False)`, then `<ul>\\n<li><a href=\"#toc-1\">Introduction</a></li>\\n</ul>\\n`.",
+    "AC-FR-003-1": "Given an empty list `[]`, when `render_toc_ul([], ordered=True)`, then `\"\"`.",
+    "AC-FR-003-2": "Given an empty list `[]`, when `render_toc_ul([], ordered=False)`, then `\"\"`.",
+    "AC-NFR-001-1": "Metric: 100% compatibility | Threshold: Zero regression failures across existing test suites | Conditions: Invoking `render_toc_ul(toc)` without new parameters | Method: Automated pytest execution."
+  },
+  "stages": {
+    "spec": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "7 testable ACs"
+      ]
+    },
+    "design": {
+      "status": "failed",
+      "attempts": 2,
+      "notes": [
+        "check did not pass within its retries"
+      ]
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0,
+      "notes": []
+    },
+    "test": {
+      "status": "pending",
+      "attempts": 0,
+      "notes": []
+    },
+    "release": {
+      "status": "pending",
+      "attempts": 0,
+      "notes": []
+    }
+  },
+  "attempts": {
+    "spec": 1,
+    "design": 2
+  },
+  "loops": {},
+  "feedback": {
+    "design": "\n\nYour previous design FAILED the pipeline's design check:\n- `TestTocHook.test_render_ordered_toc (new` not found in tests/test_hooks.py (mark it `(new)` if it should be created)\n- `TestTocHook.test_render_unordered_toc (new` not found in tests/test_hooks.py (mark it `(new)` if it should be created)"
+  },
+  "need_tests": true,
+  "allow_no_change": false,
+  "last_ok": false,
+  "results": [],
+  "status": "failed",
+  "stopped_at": "design",
+  "stop_reason": "check did not pass within its retries",
+  "tokens": 816092,
+  "events": [
+    {
+      "t": "2026-11-24T08:08:34Z",
+      "stage": "intake",
+      "msg": "build run https://github.com/QasimANaik/mistune/actions/runs/45353435408"
+    },
+    {
+      "t": "2026-11-24T08:09:13Z",
+      "stage": "spec",
+      "msg": "passed: 7 acceptance criteria"
+    },
+    {
+      "t": "2026-11-24T08:09:37Z",
+      "stage": "design",
+      "msg": "check failed: ['`TestTocHook.test_render_ordered_toc` not found in tests/test_hooks.py (mark it `(new)` if it should be created)', '`TestTocHook.test_render_unordered_toc` not found in tests/test_hooks.py (mark it `(new)` if it should be created)']"
+    },
+    {
+      "t": "2026-11-24T08:09:49Z",
+      "stage": "design",
+      "msg": "check failed: ['`TestTocHook.test_render_ordered_toc (new` not found in tests/test_hooks.py (mark it `(new)` if it should be created)', '`TestTocHook.test_render_unordered_toc (new` not found in tests/test_hooks.py (mark it `(new)` if it should be created)']"
+    },
+    {
+      "t": "2026-11-24T08:09:49Z",
+      "stage": "stop",
+      "msg": "STOP at design: check did not pass within its retries"
+    }
+  ]
+}

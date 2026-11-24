@@ -1,0 +1,332 @@
+{
+  "issue": 4,
+  "variant": "baseline",
+  "mode": "build",
+  "round": "",
+  "issue_data": {
+    "body": "I'm generating a manual with `add_toc_hook` + `render_toc_ul`. Our style guide wants the table of contents numbered (1, 1.1, 1.2, 2 \u2026), which in HTML/CSS means `<ol>` lists, but `render_toc_ul` always produces `<ul>`.\n\nRight now I copy the whole function into my project just to change `ul` to `ol`, and that copy has already drifted from upstream.\n\nProposal: an optional keyword, e.g.\n\n```python\nfrom mistune.toc import render_toc_ul\nhtml = render_toc_ul(state.env[\"toc_items\"], ordered=True)\n```\n\nwhich renders exactly the same structure but with `<ol>` instead of `<ul>` at every nesting level. Without the keyword nothing changes.\n",
+    "number": 4,
+    "title": "render_toc_ul: allow a numbered (ordered) table of contents",
+    "url": "https://github.com/QasimANaik/mistune/issues/4"
+  },
+  "injection_flags": [],
+  "base": "eae2468f669501c2a756b9b59c929df50b136b33",
+  "branch": "autose/issue-4",
+  "patch": "diff --git a/src/mistune/toc.py b/src/mistune/toc.py\nindex 1490366..e46b28f 100644\n--- a/src/mistune/toc.py\n+++ b/src/mistune/toc.py\n@@ -101,8 +101,8 @@ def normalize_toc_item(md: \"Markdown\", token: Dict[str, Any], parent: Optional[A\n     return attrs[\"level\"], attrs[\"id\"], text\n \n \n-def render_toc_ul(toc: Iterable[Tuple[int, str, str]]) -> str:\n-    \"\"\"Render a <ul> table of content HTML. The param \"toc\" should\n+def render_toc_ul(toc: Iterable[Tuple[int, str, str]], ordered: bool = False) -> str:\n+    \"\"\"Render a <ul> or <ol> table of content HTML. The param \"toc\" should\n     be formatted into this structure::\n \n         [\n@@ -121,6 +121,7 @@ def render_toc_ul(toc: Iterable[Tuple[int, str, str]]) -> str:\n     if not toc:\n         return \"\"\n \n+    tag = 'ol' if ordered else 'ul'\n     s = \"\"\n     levels: List[int] = []\n     for level, k, text in toc:\n@@ -131,14 +132,14 @@ def render_toc_ul(toc: Iterable[Tuple[int, str, str]]) -> str:\n         elif level == levels[-1]:\n             s += \"</li>\\n<li>\" + item\n         elif level > levels[-1]:\n-            s += \"\\n<ul>\\n<li>\" + item\n+            s += \"\\n<{}>\\n<li>\".format(tag) + item\n             levels.append(level)\n         else:\n             levels.pop()\n             while levels:\n                 last_level = levels.pop()\n                 if level == last_level:\n-                    s += \"</li>\\n</ul>\\n</li>\\n<li>\" + item\n+                    s += \"</li>\\n</{}>\\n</li>\\n<li>\".format(tag) + item\n                     levels.append(level)\n                     break\n                 elif level > last_level:\n@@ -147,15 +148,15 @@ def render_toc_ul(toc: Iterable[Tuple[int, str, str]]) -> str:\n                     levels.append(level)\n                     break\n                 else:\n-                    s += \"</li>\\n</ul>\\n\"\n+                    s += \"</li>\\n</{}>\\n\".format(tag)\n             else:\n                 levels.append(level)\n                 s += \"</li>\\n<li>\" + item\n \n     while len(levels) > 1:\n-        s += \"</li>\\n</ul>\\n\"\n+        s += \"</li>\\n</{}>\\n\".format(tag)\n         levels.pop()\n \n     if not s:\n         return \"\"\n-    return \"<ul>\\n\" + s + \"</li>\\n</ul>\\n\"\n+    return \"<{}>\\n\".format(tag) + s + \"</li>\\n</{}>\\n\".format(tag)\ndiff --git a/tests/test_autose_issue_4_e2e.py b/tests/test_autose_issue_4_e2e.py\nnew file mode 100644\nindex 0000000..a5cfe42\n--- /dev/null\n+++ b/tests/test_autose_issue_4_e2e.py\n@@ -0,0 +1,73 @@\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+from mistune.toc import add_toc_hook, render_toc_ul\n+\n+\n+class TestAutoseIssue4E2E(TestCase):\n+    def test_unordered_toc_and_backward_compatibility(self):\n+        # AC-FR-001-1: single item, default ordered=False (or omitted)\n+        toc1 = [(1, 'intro', 'Introduction')]\n+        self.assertEqual(\n+            render_toc_ul(toc1),\n+            '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n+        )\n+        self.assertEqual(\n+            render_toc_ul(toc1, ordered=False),\n+            '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n+        )\n+\n+        # AC-FR-001-2: nested items with ordered=False\n+        toc2 = [(1, 'a', 'A'), (2, 'b', 'B')]\n+        self.assertEqual(\n+            render_toc_ul(toc2, ordered=False),\n+            '<ul>\\n<li><a href=\"#a\">A</a>\\n<ul>\\n<li><a href=\"#b\">B</a></li>\\n</ul>\\n</li>\\n</ul>\\n'\n+        )\n+\n+    def test_ordered_toc(self):\n+        # AC-FR-002-1: single item with ordered=True\n+        toc1 = [(1, 'intro', 'Introduction')]\n+        self.assertEqual(\n+            render_toc_ul(toc1, ordered=True),\n+            '<ol>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ol>\\n'\n+        )\n+\n+        # AC-FR-002-2: nested items with ordered=True\n+        toc2 = [(1, 'a', 'A'), (2, 'b', 'B')]\n+        self.assertEqual(\n+            render_toc_ul(toc2, ordered=True),\n+            '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n</ol>\\n'\n+        )\n+\n+        # AC-FR-002-3: nested items then sibling with ordered=True\n+        toc3 = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n+        self.assertEqual(\n+            render_toc_ul(toc3, ordered=True),\n+            '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>\\n</ol>\\n'\n+        )\n+\n+    def test_regression_empty_toc(self):\n+        # Regression test for empty iterable and filtered iterables\n+        self.assertEqual(render_toc_ul([]), \"\")\n+        self.assertEqual(render_toc_ul(filter(lambda _: False, [])), \"\")\n+\n+    def test_regression_markdown_toc_hook(self):\n+        # Regression test for markdown parsing with add_toc_hook and render_toc_ul\n+        md = create_markdown(escape=False)\n+        add_toc_hook(md)\n+        html, state = md.parse(\"# Hello\\n\\n## World\")\n+        toc_html = render_toc_ul(state.env[\"toc_items\"])\n+        self.assertIn('<a href=\"#toc_1\">Hello</a>', toc_html)\n+        self.assertIn('<a href=\"#toc_2\">World</a>', toc_html)\n+        self.assertTrue(toc_html.startswith(\"<ul>\\n\"))\n+\n+    def test_integration_ordered_toc_hook(self):\n+        # Integration test using markdown parser with state env and rendering ordered TOC\n+        md = create_markdown(escape=False)\n+        add_toc_hook(md)\n+        _, state = md.parse(\"# Section 1\\n\\n## Subsection 1.1\\n\\n# Section 2\")\n+        toc_html = render_toc_ul(state.env[\"toc_items\"], ordered=True)\n+        self.assertTrue(toc_html.startswith(\"<ol>\\n\"))\n+        self.assertIn('<ol>\\n<li><a href=\"#toc_2\">Subsection 1.1</a></li>\\n</ol>', toc_html)\n+        self.assertIn('<li><a href=\"#toc_3\">Section 2</a></li>', toc_html)\n+        self.assertTrue(toc_html.endswith(\"</ol>\\n\"))\ndiff --git a/tests/test_autose_issue_4_fr001.py b/tests/test_autose_issue_4_fr001.py\nnew file mode 100644\nindex 0000000..651dd0a\n--- /dev/null\n+++ b/tests/test_autose_issue_4_fr001.py\n@@ -0,0 +1,30 @@\n+from mistune.toc import render_toc_ul\n+\n+\n+def test_render_toc_ul_single_item():\n+    \"\"\"AC-FR-001-1: Given toc = [(1, 'intro', 'Introduction')], when render_toc_ul(toc), then render correct unordered list HTML.\"\"\"\n+    toc = [(1, 'intro', 'Introduction')]\n+    assert render_toc_ul(toc) == '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n+\n+\n+def test_render_toc_ul_nested_items():\n+    \"\"\"AC-FR-001-2: Given toc = [(1, 'a', 'A'), (2, 'b', 'B')], when render_toc_ul(toc, ordered=False), then render nested list HTML (and support ordered=True).\"\"\"\n+    toc = [(1, 'a', 'A'), (2, 'b', 'B')]\n+    assert render_toc_ul(toc, ordered=False) == (\n+        '<ul>\\n'\n+        '<li><a href=\"#a\">A</a>\\n'\n+        '<ul>\\n'\n+        '<li><a href=\"#b\">B</a></li>\\n'\n+        '</ul>\\n'\n+        '</li>\\n'\n+        '</ul>\\n'\n+    )\n+    assert render_toc_ul(toc, ordered=True) == (\n+        '<ol>\\n'\n+        '<li><a href=\"#a\">A</a>\\n'\n+        '<ol>\\n'\n+        '<li><a href=\"#b\">B</a></li>\\n'\n+        '</ol>\\n'\n+        '</li>\\n'\n+        '</ol>\\n'\n+    )\ndiff --git a/tests/test_autose_issue_4_fr002.py b/tests/test_autose_issue_4_fr002.py\nnew file mode 100644\nindex 0000000..4d243f0\n--- /dev/null\n+++ b/tests/test_autose_issue_4_fr002.py\n@@ -0,0 +1,19 @@\n+from mistune.toc import render_toc_ul\n+\n+\n+def test_ac_fr_002_1():\n+    \"\"\"AC-FR-002-1: Given toc = [(1, 'intro', 'Introduction')], when render_toc_ul(toc, ordered=True), render ordered TOC with <ol> wrapper.\"\"\"\n+    toc = [(1, 'intro', 'Introduction')]\n+    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ol>\\n'\n+\n+\n+def test_ac_fr_002_2():\n+    \"\"\"AC-FR-002-2: Given toc = [(1, 'a', 'A'), (2, 'b', 'B')], when render_toc_ul(toc, ordered=True), render nested ordered TOC.\"\"\"\n+    toc = [(1, 'a', 'A'), (2, 'b', 'B')]\n+    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n</ol>\\n'\n+\n+\n+def test_ac_fr_002_3():\n+    \"\"\"AC-FR-002-3: Given toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')], when render_toc_ul(toc, ordered=True), render mixed nested and flat ordered TOC items.\"\"\"\n+    toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n+    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>\\n</ol>\\n'\ndiff --git a/tests/test_autose_issue_4_nfr001.py b/tests/test_autose_issue_4_nfr001.py\nnew file mode 100644\nindex 0000000..c0589f2\n--- /dev/null\n+++ b/tests/test_autose_issue_4_nfr001.py\n@@ -0,0 +1,39 @@\n+import inspect\n+\n+from mistune.toc import render_toc_ul\n+\n+\n+def test_ac_nfr_001_1_backward_compatible_single_argument():\n+    \"\"\"AC-NFR-001-1: 100% backward compatible for single-argument callers calling render_toc_ul(toc).\"\"\"\n+    toc = [\n+        (1, 'intro', 'Introduction'),\n+        (2, 'install', 'Install'),\n+        (1, 'license', 'License'),\n+    ]\n+\n+    # Call render_toc_ul with a single argument (backward compatibility check)\n+    result_single = render_toc_ul(toc)\n+\n+    # Call with explicit default keyword argument\n+    result_default = render_toc_ul(toc, ordered=False)\n+\n+    expected = (\n+        \"<ul>\\n\"\n+        \"<li><a href=\\\"#intro\\\">Introduction</a>\\n\"\n+        \"<ul>\\n\"\n+        \"<li><a href=\\\"#install\\\">Install</a></li>\\n\"\n+        \"</ul>\\n\"\n+        \"</li>\\n\"\n+        \"<li><a href=\\\"#license\\\">License</a></li>\\n\"\n+        \"</ul>\\n\"\n+    )\n+\n+    assert result_single == expected\n+    assert result_single == result_default\n+\n+    # Verify function signature allows single-argument calls\n+    sig = inspect.signature(render_toc_ul)\n+    params = list(sig.parameters.values())\n+    assert len(params) >= 1\n+    assert params[0].name == 'toc'\n+    assert params[1].default is False",
+  "acs": {
+    "AC-FR-001-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+    "AC-FR-001-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=False)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ul>\\n<li><a href=\"#b\">B</a></li>\\n</ul>\\n</li>'`.",
+    "AC-FR-002-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+    "AC-FR-002-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>'`.",
+    "AC-FR-002-3": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>'`.",
+    "AC-NFR-001-1": "Metric: API signature compatibility | Threshold: 100% backward compatible for single-argument callers | Conditions: Calling `render_toc_ul(toc)` | Method: Automated pytest unit tests."
+  },
+  "stages": {
+    "spec": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "6 testable ACs"
+      ]
+    },
+    "design": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "test": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "release": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "PR #11, CI green"
+      ]
+    }
+  },
+  "attempts": {
+    "spec": 1,
+    "design": 1,
+    "implement": 1,
+    "test": 1,
+    "release": 1
+  },
+  "loops": {},
+  "feedback": {},
+  "need_tests": false,
+  "allow_no_change": true,
+  "last_ok": true,
+  "weak": [],
+  "redo_items": [],
+  "impl_changed": true,
+  "work_items": [
+    {
+      "id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-001-1",
+        "AC-FR-001-2"
+      ],
+      "acs": {
+        "AC-FR-001-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+        "AC-FR-001-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=False)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ul>\\n<li><a href=\"#b\">B</a></li>\\n</ul>\\n</li>'`."
+      },
+      "test_file": "tests/test_autose_issue_4_fr001.py",
+      "budget": {
+        "tokens": 1442174
+      }
+    },
+    {
+      "id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-002-1",
+        "AC-FR-002-2",
+        "AC-FR-002-3"
+      ],
+      "acs": {
+        "AC-FR-002-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+        "AC-FR-002-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>'`.",
+        "AC-FR-002-3": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>'`."
+      },
+      "test_file": "tests/test_autose_issue_4_fr002.py",
+      "budget": {
+        "tokens": 1442174
+      }
+    },
+    {
+      "id": "c3r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1"
+      ],
+      "acs": {
+        "AC-NFR-001-1": "Metric: API signature compatibility | Threshold: 100% backward compatible for single-argument callers | Conditions: Calling `render_toc_ul(toc)` | Method: Automated pytest unit tests."
+      },
+      "test_file": "tests/test_autose_issue_4_nfr001.py",
+      "budget": {
+        "tokens": 1442174
+      }
+    },
+    {
+      "id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "acs": {
+        "AC-FR-001-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+        "AC-FR-001-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=False)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ul>\\n<li><a href=\"#b\">B</a></li>\\n</ul>\\n</li>'`.",
+        "AC-FR-002-1": "Given `toc = [(1, 'intro', 'Introduction')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#intro\">Introduction</a></li>'`.",
+        "AC-FR-002-2": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>'`.",
+        "AC-FR-002-3": "Given `toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]`, when `render_toc_ul(toc, ordered=True)`, then exact output is `'<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>'`.",
+        "AC-NFR-001-1": "Metric: API signature compatibility | Threshold: 100% backward compatible for single-argument callers | Conditions: Calling `render_toc_ul(toc)` | Method: Automated pytest unit tests."
+      },
+      "test_file": "tests/test_autose_issue_4_e2e.py",
+      "budget": {
+        "tokens": 1442174
+      }
+    }
+  ],
+  "results": [
+    {
+      "work_item_id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-001-1",
+        "AC-FR-001-2"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_4_fr001.py",
+      "content": "from mistune.toc import render_toc_ul\n\n\ndef test_render_toc_ul_single_item():\n    \"\"\"AC-FR-001-1: Given toc = [(1, 'intro', 'Introduction')], when render_toc_ul(toc), then render correct unordered list HTML.\"\"\"\n    toc = [(1, 'intro', 'Introduction')]\n    assert render_toc_ul(toc) == '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n\n\ndef test_render_toc_ul_nested_items():\n    \"\"\"AC-FR-001-2: Given toc = [(1, 'a', 'A'), (2, 'b', 'B')], when render_toc_ul(toc, ordered=False), then render nested list HTML (and support ordered=True).\"\"\"\n    toc = [(1, 'a', 'A'), (2, 'b', 'B')]\n    assert render_toc_ul(toc, ordered=False) == (\n        '<ul>\\n'\n        '<li><a href=\"#a\">A</a>\\n'\n        '<ul>\\n'\n        '<li><a href=\"#b\">B</a></li>\\n'\n        '</ul>\\n'\n        '</li>\\n'\n        '</ul>\\n'\n    )\n    assert render_toc_ul(toc, ordered=True) == (\n        '<ol>\\n'\n        '<li><a href=\"#a\">A</a>\\n'\n        '<ol>\\n'\n        '<li><a href=\"#b\">B</a></li>\\n'\n        '</ol>\\n'\n        '</li>\\n'\n        '</ol>\\n'\n    )\n",
+      "tests": [
+        "test_render_toc_ul_single_item",
+        "test_render_toc_ul_nested_items"
+      ],
+      "covered": {
+        "AC-FR-001-1": [
+          "test_render_toc_ul_single_item"
+        ],
+        "AC-FR-001-2": [
+          "test_render_toc_ul_nested_items"
+        ]
+      },
+      "pytest": "2 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 281822,
+      "notes": "ary:\n- Created `tests/test_autose_issue_4_fr001.py` covering `AC-FR-001-1` and `AC-FR-001-2`.\n- Tested `render_toc_ul` with single and nested headings, for both unordered and ordered lists.\n- Verified all tests pass successfully with `uv run pytest -q tests/test_autose_issue_4_fr001.py`.\n- Ran linter (`ruff check .`) and typechecker (`mypy`), all checks passed cleanly.\n\nAC-CONFLICT: AC-FR-001-1: The acceptance criterion omits the root `<ul>` and `</ul>` tags in the expected output.\nAC-CONFLICT: AC-FR-001-2: The acceptance criterion omits the root `<ul>` and `</ul>` tags in the expected output.",
+      "ac_conflicts": [
+        "AC-CONFLICT: AC-FR-001-1: The acceptance criterion omits the root `<ul>` and `</ul>` tags in the expected output.",
+        "AC-CONFLICT: AC-FR-001-2: The acceptance criterion omits the root `<ul>` and `</ul>` tags in the expected output."
+      ]
+    },
+    {
+      "work_item_id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-002-1",
+        "AC-FR-002-2",
+        "AC-FR-002-3"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_4_fr002.py",
+      "content": "from mistune.toc import render_toc_ul\n\n\ndef test_ac_fr_002_1():\n    \"\"\"AC-FR-002-1: Given toc = [(1, 'intro', 'Introduction')], when render_toc_ul(toc, ordered=True), render ordered TOC with <ol> wrapper.\"\"\"\n    toc = [(1, 'intro', 'Introduction')]\n    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ol>\\n'\n\n\ndef test_ac_fr_002_2():\n    \"\"\"AC-FR-002-2: Given toc = [(1, 'a', 'A'), (2, 'b', 'B')], when render_toc_ul(toc, ordered=True), render nested ordered TOC.\"\"\"\n    toc = [(1, 'a', 'A'), (2, 'b', 'B')]\n    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n</ol>\\n'\n\n\ndef test_ac_fr_002_3():\n    \"\"\"AC-FR-002-3: Given toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')], when render_toc_ul(toc, ordered=True), render mixed nested and flat ordered TOC items.\"\"\"\n    toc = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n    assert render_toc_ul(toc, ordered=True) == '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>\\n</ol>\\n'\n",
+      "tests": [
+        "test_ac_fr_002_1",
+        "test_ac_fr_002_2",
+        "test_ac_fr_002_3"
+      ],
+      "covered": {
+        "AC-FR-002-1": [
+          "test_ac_fr_002_1",
+          "test_ac_fr_002_1"
+        ],
+        "AC-FR-002-2": [
+          "test_ac_fr_002_2",
+          "test_ac_fr_002_2"
+        ],
+        "AC-FR-002-3": [
+          "test_ac_fr_002_3",
+          "test_ac_fr_002_3"
+        ]
+      },
+      "pytest": "3 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 349770,
+      "notes": "`<ol>` and `</ol>` wrapper tags, which contradicts the library's existing convention where `render_toc_ul` wraps generated list items in a root list container (`<ul>` or `<ol>`). Tests follow the correct library convention.\n\nSummary of work completed:\n1. Created `tests/test_autose_issue_4_fr002.py` containing test cases covering AC-FR-002-1, AC-FR-002-2, and AC-FR-002-3.\n2. Verified that `uv run pytest -q tests/test_autose_issue_4_fr002.py` passes successfully (3 passed).\n3. Verified that the full test suite (`1330 passed`), linter (`ruff`), and type checker (`mypy`) all pass with zero errors.",
+      "ac_conflicts": [
+        "AC-CONFLICT: AC-FR-002-1, AC-FR-002-2, AC-FR-002-3: The acceptance criteria expected output omitted the root `<ol>` and `</ol>` wrapper tags, which contradicts the library's existing convention where `render_toc_ul` wraps generated list items in a root list container (`<ul>` or `<ol>`). Tests follow the correct"
+      ]
+    },
+    {
+      "work_item_id": "c3r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_4_nfr001.py",
+      "content": "import inspect\n\nfrom mistune.toc import render_toc_ul\n\n\ndef test_ac_nfr_001_1_backward_compatible_single_argument():\n    \"\"\"AC-NFR-001-1: 100% backward compatible for single-argument callers calling render_toc_ul(toc).\"\"\"\n    toc = [\n        (1, 'intro', 'Introduction'),\n        (2, 'install', 'Install'),\n        (1, 'license', 'License'),\n    ]\n\n    # Call render_toc_ul with a single argument (backward compatibility check)\n    result_single = render_toc_ul(toc)\n\n    # Call with explicit default keyword argument\n    result_default = render_toc_ul(toc, ordered=False)\n\n    expected = (\n        \"<ul>\\n\"\n        \"<li><a href=\\\"#intro\\\">Introduction</a>\\n\"\n        \"<ul>\\n\"\n        \"<li><a href=\\\"#install\\\">Install</a></li>\\n\"\n        \"</ul>\\n\"\n        \"</li>\\n\"\n        \"<li><a href=\\\"#license\\\">License</a></li>\\n\"\n        \"</ul>\\n\"\n    )\n\n    assert result_single == expected\n    assert result_single == result_default\n\n    # Verify function signature allows single-argument calls\n    sig = inspect.signature(render_toc_ul)\n    params = list(sig.parameters.values())\n    assert len(params) >= 1\n    assert params[0].name == 'toc'\n    assert params[1].default is False\n",
+      "tests": [
+        "test_ac_nfr_001_1_backward_compatible_single_argument"
+      ],
+      "covered": {
+        "AC-NFR-001-1": [
+          "test_ac_nfr_001_1_backward_compatible_single_argument",
+          "test_ac_nfr_001_1_backward_compatible_single_argument"
+        ]
+      },
+      "pytest": "1 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 269758,
+      "notes": "- Written pytest test covering AC-NFR-001-1 in `tests/test_autose_issue_4_nfr001.py`.\n- Verified 100% backward compatibility for single-argument callers of `render_toc_ul(toc)`.\n- Validated successfully with `uv run pytest -q tests/test_autose_issue_4_nfr001.py`, `uv run ruff check .`, and `uv run mypy`. All tests passed.",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_4_e2e.py",
+      "content": "from unittest import TestCase\n\nfrom mistune import create_markdown\nfrom mistune.toc import add_toc_hook, render_toc_ul\n\n\nclass TestAutoseIssue4E2E(TestCase):\n    def test_unordered_toc_and_backward_compatibility(self):\n        # AC-FR-001-1: single item, default ordered=False (or omitted)\n        toc1 = [(1, 'intro', 'Introduction')]\n        self.assertEqual(\n            render_toc_ul(toc1),\n            '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n        )\n        self.assertEqual(\n            render_toc_ul(toc1, ordered=False),\n            '<ul>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ul>\\n'\n        )\n\n        # AC-FR-001-2: nested items with ordered=False\n        toc2 = [(1, 'a', 'A'), (2, 'b', 'B')]\n        self.assertEqual(\n            render_toc_ul(toc2, ordered=False),\n            '<ul>\\n<li><a href=\"#a\">A</a>\\n<ul>\\n<li><a href=\"#b\">B</a></li>\\n</ul>\\n</li>\\n</ul>\\n'\n        )\n\n    def test_ordered_toc(self):\n        # AC-FR-002-1: single item with ordered=True\n        toc1 = [(1, 'intro', 'Introduction')]\n        self.assertEqual(\n            render_toc_ul(toc1, ordered=True),\n            '<ol>\\n<li><a href=\"#intro\">Introduction</a></li>\\n</ol>\\n'\n        )\n\n        # AC-FR-002-2: nested items with ordered=True\n        toc2 = [(1, 'a', 'A'), (2, 'b', 'B')]\n        self.assertEqual(\n            render_toc_ul(toc2, ordered=True),\n            '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n</ol>\\n'\n        )\n\n        # AC-FR-002-3: nested items then sibling with ordered=True\n        toc3 = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n        self.assertEqual(\n            render_toc_ul(toc3, ordered=True),\n            '<ol>\\n<li><a href=\"#a\">A</a>\\n<ol>\\n<li><a href=\"#b\">B</a></li>\\n</ol>\\n</li>\\n<li><a href=\"#c\">C</a></li>\\n</ol>\\n'\n        )\n\n    def test_regression_empty_toc(self):\n        # Regression test for empty iterable and filtered iterables\n        self.assertEqual(render_toc_ul([]), \"\")\n        self.assertEqual(render_toc_ul(filter(lambda _: False, [])), \"\")\n\n    def test_regression_markdown_toc_hook(self):\n        # Regression test for markdown parsing with add_toc_hook and render_toc_ul\n        md = create_markdown(escape=False)\n        add_toc_hook(md)\n        html, state = md.parse(\"# Hello\\n\\n## World\")\n        toc_html = render_toc_ul(state.env[\"toc_items\"])\n        self.assertIn('<a href=\"#toc_1\">Hello</a>', toc_html)\n        self.assertIn('<a href=\"#toc_2\">World</a>', toc_html)\n        self.assertTrue(toc_html.startswith(\"<ul>\\n\"))\n\n    def test_integration_ordered_toc_hook(self):\n        # Integration test using markdown parser with state env and rendering ordered TOC\n        md = create_markdown(escape=False)\n        add_toc_hook(md)\n        _, state = md.parse(\"# Section 1\\n\\n## Subsection 1.1\\n\\n# Section 2\")\n        toc_html = render_toc_ul(state.env[\"toc_items\"], ordered=True)\n        self.assertTrue(toc_html.startswith(\"<ol>\\n\"))\n        self.assertIn('<ol>\\n<li><a href=\"#toc_2\">Subsection 1.1</a></li>\\n</ol>', toc_html)\n        self.assertIn('<li><a href=\"#toc_3\">Section 2</a></li>', toc_html)\n        self.assertTrue(toc_html.endswith(\"</ol>\\n\"))\n",
+      "tests": [
+        "test_unordered_toc_and_backward_compatibility",
+        "test_ordered_toc",
+        "test_regression_empty_toc",
+        "test_regression_markdown_toc_hook",
+        "test_integration_ordered_toc_hook"
+      ],
+      "covered": {},
+      "pytest": "5 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 252197,
+      "notes": "l resets.\n  3. `test_regression_empty_toc`: Regression test verifying empty iterables and filtered iterables return `\"\"`.\n  4. `test_regression_markdown_toc_hook`: Regression test verifying Markdown parsing integration with `add_toc_hook`.\n  5. `test_integration_ordered_toc_hook`: Integration test combining markdown parsing with ordered TOC rendering.\n- **Verification:**\n  - `uv run pytest -q tests/test_autose_issue_4_e2e.py` passed successfully.\n  - `uv run ruff check .` passed with no formatting or lint errors.\n  - `uv run mypy` passed successfully with strict type-checking on `src/mistune`.",
+      "ac_conflicts": []
+    }
+  ],
+  "pr": 11,
+  "pr_url": "https://github.com/QasimANaik/mistune/pull/11",
+  "ci": {
+    "url": "https://github.com/QasimANaik/mistune/actions/runs/45355186100",
+    "flake_reruns": 0,
+    "conclusion": "success",
+    "attempt": 1
+  },
+  "status": "pr_open",
+  "tokens": 1942677,
+  "events": [
+    {
+      "t": "2026-11-24T08:17:09Z",
+      "stage": "intake",
+      "msg": "build run https://github.com/QasimANaik/mistune/actions/runs/45354704591"
+    },
+    {
+      "t": "2026-11-24T08:17:40Z",
+      "stage": "spec",
+      "msg": "passed: 6 acceptance criteria"
+    },
+    {
+      "t": "2026-11-24T08:18:03Z",
+      "stage": "design",
+      "msg": "passed"
+    },
+    {
+      "t": "2026-11-24T08:18:46Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T08:18:46Z",
+      "stage": "test",
+      "msg": "orchestrator: 4 worker(s) in parallel: c1r1=['AC-FR-001-1', 'AC-FR-001-2'], c2r1=['AC-FR-002-1', 'AC-FR-002-2', 'AC-FR-002-3'], c3r1=['AC-NFR-001-1'], e2er1=e2e"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c1r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c2r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c3r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker e2er1: complete"
+    },
+    {
+      "t": "2026-11-24T08:19:51Z",
+      "stage": "test",
+      "msg": "merge: passed []"
+    },
+    {
+      "t": "2026-11-24T08:23:26Z",
+      "stage": "release",
+      "msg": "PR #11; CI success https://github.com/QasimANaik/mistune/actions/runs/45355186100"
+    }
+  ]
+}

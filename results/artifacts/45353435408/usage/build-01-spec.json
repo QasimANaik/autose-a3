@@ -1,0 +1,28 @@
+{
+  "name": "build-01-spec",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_s": 38.7,
+  "tool_calls": 14,
+  "denied_tool_calls": 1,
+  "stats": {
+    "total_tokens": 452549,
+    "input_tokens": 439837,
+    "output_tokens": 4721,
+    "cached": 372882,
+    "input": 66955,
+    "duration_ms": 37275,
+    "tool_calls": 14,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 452549,
+        "input_tokens": 439837,
+        "output_tokens": 4721,
+        "cached": 372882,
+        "input": 66955
+      }
+    }
+  },
+  "error": ""
+}

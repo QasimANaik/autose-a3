@@ -1,0 +1,21 @@
+{
+  "verdict": "approve",
+  "route": "none",
+  "summary": "The PR correctly implements the ordered table of contents option in render_toc_ul without breaking backward compatibility. All unit tests, integration tests, ruff checks, and strict mypy checks pass successfully.",
+  "checked": [
+    "Ran pytest suite (1338 passed): `uv run pytest -q`",
+    "Checked code style and linting with ruff: `uv run ruff check .`",
+    "Checked type safety with mypy: `uv run mypy src/mistune`",
+    "Verified issue example snippet output: `uv run python -c ...`",
+    "Inspected code diff in src/mistune/toc.py and associated new test files"
+  ],
+  "findings": [],
+  "discarded_findings": [],
+  "round": "1",
+  "model": "gemini-3.5-flash-lite",
+  "variant": "baseline",
+  "pr": 11,
+  "head_sha": "ede82eece4912bb9bdf913dd4efca8f2970d3d68",
+  "issue": 4,
+  "tokens": 102410
+}
