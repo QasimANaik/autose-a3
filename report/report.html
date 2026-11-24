@@ -129,7 +129,7 @@ a { color: #2f5fbf; text-decoration: none; }
 <text x="14" y="528" class="s"><tspan font-family="monospace">uv run pytest|ruff|mypy|python</tspan>; web, git push/commit, gh, curl denied. Edits outside the stage's folder</text>
 <text x="14" y="544" class="s">are reverted by code. 30 turns, 1200 s per call; long shell output summarised; 8M tokens per job.</text>
 </svg>
-<figcaption><b>Figure 1. Component view.</b> Green = code only, blue = agent call, purple = parallel subgraph, red = writes to GitHub, yellow = trigger / human. Dashed red = loop-backs chosen by code; dashed purple = conditional / <code>Send</code>. Full editable versions (every node, its function and its cost): <code>architecture/views/component-view.drawio</code>.</figcaption>
+<figcaption><b>Figure 1. Component view.</b> Green = code only, blue = agent call, purple = parallel subgraph, red = writes to GitHub, yellow = trigger / human. Dashed red = loop-backs chosen by code; dashed purple = conditional / <code>Send</code>. Files: <code>architecture/views/component-view.svg</code> (this figure) and <code>component-view.drawio</code> (editable full version: every node, its function and its estimated cost).</figcaption>
 </figure>
 
 <figure>
@@ -162,7 +162,7 @@ a { color: #2f5fbf; text-decoration: none; }
 <text x="2" y="414" class="tm">human</text><line x1="105" y1="410" x2="573" y2="410" class="ms" marker-end="url(#b)"/><text x="160" y="406" class="mg">a human merges or closes PR #11 (the bot never merges)</text>
 <text x="62" y="460" class="mg">Total 8 min 15 s · 8 agent calls · 2.00M input tokens (79% cached), 14.5k output · $0.21 · hidden tests 4/4</text>
 </svg>
-<figcaption><b>Figure 2. Sequence view of the real run 45354704591</b> (issue #4, <a href="https://github.com/QasimANaik/mistune/pull/11">PR #11</a>). Times are UTC from the job timings and the state events. Durations are measured agent-call times from <code>usage/*.json</code>.</figcaption>
+<figcaption><b>Figure 2. Sequence view of the real run 45354704591</b> (issue #4, <a href="https://github.com/QasimANaik/mistune/pull/11">PR #11</a>). Times are UTC from the job timings and the state events. Durations are measured agent-call times from <code>usage/*.json</code>. Files: <code>architecture/views/sequence-view.svg</code> / <code>.drawio</code>; the stage map is in <code>stage-map.md</code> / <code>.drawio</code>.</figcaption>
 </figure>
 
 <table>
@@ -329,7 +329,7 @@ Review cost $0.013–$0.35 per round. The 1.3M-token sp-3 review explored the fi
 <ol>
 <li><b>Small sample, no repetitions.</b> Five issues, one run each on the final workflow, five seeded PRs, one review per PR. LLM output is not deterministic. Stage rates rest on 4–12 observations.</li>
 <li><b>The system changed between runs.</b> PRs #7–#15 and a model change landed during the runs, so the stage rates mix several versions of the workflow.</li>
-<li><b>Author bias and issue selection.</b> One person wrote the issues, the hidden tests, the seeded defects and the workflow. The original vague issue (#5, inline math) was <b>closed and replaced</b> by #18 after three failed runs, which favours the pipeline. Issue #1 turned out to be a behaviour change that contradicts upstream's fixtures. The seeded defects are plausible, but only four of them.</li>
+<li><b>Author bias and issue selection.</b> One person wrote the issues, the hidden tests, the seeded defects and the workflow. The original vague issue (#5, inline math) was <b>closed and replaced</b> by #18 after three failed runs, which favours the pipeline (its text and hidden tests are kept in <code>experiment/issues/replaced/</code> and <code>experiment/hidden_tests/replaced/</code>). Issue #1 turned out to be a behaviour change that contradicts upstream's fixtures. The seeded defects are plausible, but only four of them.</li>
 <li><b>Same model for builder and reviewer</b> (ADR-014), and E1's weak arm is missing (credits ran out). So the 5/5 detection result cannot yet be attributed to the prompt and permissions rather than to the model.</li>
 <li><b>Hidden tests are narrow</b> (4 per issue, written by the author), and CI differs from the local checks (PyPy). Passing hidden tests does not make a PR mergeable as is; merging is left to a human.</li>
 <li><b>Costs</b> are list prices applied to the usage files (gemini-3.5-flash-lite $0.30 / $0.03 / $2.50 per 1M). Implicit-cache hit rates varied (66–86%).</li>
@@ -377,9 +377,12 @@ Review cost $0.013–$0.35 per round. The 1.3M-token sp-3 review explored the fi
 
 <h2>Appendix C. Reproducibility, safety settings, AI use</h2>
 <ul>
+<li><b>Issues:</b> the five issue texts are in <code>experiment/issues/</code> (#1, #2, #3, #4, #18); the replaced vague issue #5 is in <code>experiment/issues/replaced/</code>.</li>
 <li><b>Target:</b> fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> pinned at upstream <code>f7ec702edfc1ad5579a76f881238841af266d93c</code>. Workflow and agent code: <code>workflow/</code> (copy of <code>.github/workflows/autose.yml</code> and <code>autose/</code>), with the history of PRs #6–#15 in the fork.</li>
 <li><b>Branch protection:</b> ruleset <code>protect-main</code> (no deletion or force push; a PR with 1 code-owner approval is required; admin bypass for pull requests only). CODEOWNERS = the author, so a bot approval can never satisfy the merge rule. <i>Screenshot: appendix image (to add).</i></li>
-<li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 30-turn limit (60 before PR #12), summarised shell output and a 1200 s limit per agent call. <i>Budget alert screenshot: appendix image (to add).</i></li>
+<li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 30-turn limit (60 before PR #12), summarised shell output and a 1200 s limit per agent call.</li>
+<li><b>Spending limit:</b> the Gemini key runs on <b>prepaid credits</b>, which act as a hard cap. When they ran out, the five weak-reviewer runs (<a href="https://github.com/QasimANaik/mistune/actions/runs/45445763935">45445763935</a>–<a href="https://github.com/QasimANaik/mistune/actions/runs/45445790671">45445790671</a>) stopped with the provider's error ("prepayment credits are depleted") instead of spending more, and the workflow posted an <i>error</i> review rather than a verdict. Total measured spend: $4.73. <i>Billing screenshot: appendix image (to add).</i></li>
+<li><b>Demo video:</b> <code>demo.mp4</code> (4 min 55 s), recorded at 15 min 40 s and sped up 3.2× evenly (no audio). It follows the issue #4 run <a href="https://github.com/QasimANaik/mistune/actions/runs/45440832883">45440832883</a> from the issue page through the build log; that run stopped at release on a PyPy-only CI failure (Section 4). The complete run that ends in a posted review is <a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a> → <a href="https://github.com/QasimANaik/mistune/pull/11#pullrequestreview-6035868107">PR #11 review</a> (Figure 2).</li>
 <li><b>Local evidence:</b> <code>experiment/scripts/sim/</code> replays the graph with a fake model: happy path, build retry, crash and resume, review judge, rework, clarify, model outage, and test dispute (a replay of run 6 with its real diff).</li>
 <li><b>AI use:</b> the workflow code, prompts, draw.io generators, simulations and the drafts of this report were written with the help of an AI coding assistant (Claude Code) and reviewed by the author. Text marked "✎ draft reasoning" and the "Rationale" sections of the ADRs must be in the author's own words, as the course policy requires.</li>
 </ul>
