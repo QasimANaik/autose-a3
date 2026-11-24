@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoSE A3 Report</title>
+<style>
+@page { size: A4; margin: 14mm 14mm 15mm 14mm; }
+:root { --ink:#1b2330; --muted:#5a6577; --line:#c8d0da; --agent:#dae8fc; --agentS:#6c8ebf; --code:#d5e8d4; --codeS:#82b366;
+        --wr:#f8cecc; --wrS:#b85450; --sub:#e1d5e7; --subS:#9673a6; --hu:#fff2cc; --huS:#d6b656; --pend:#fff4e0; --own:#eef4ff; }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; font-size: 8.9pt; line-height: 1.38; color: var(--ink); margin: 0; }
+h1 { font-size: 17pt; margin: 0 0 2pt; }
+h2 { font-size: 12pt; margin: 9pt 0 4pt; border-bottom: 1.2pt solid var(--ink); padding-bottom: 1pt; }
+h3 { font-size: 9.8pt; margin: 7pt 0 3pt; }
+p { margin: 0 0 4.5pt; text-align: justify; }
+ul, ol { margin: 0 0 4.5pt; padding-left: 14pt; } li { margin: 0 0 1.5pt; }
+table { border-collapse: collapse; width: 100%; margin: 3pt 0 6pt; font-size: 7.6pt; page-break-inside: auto; }
+th, td { border: 0.6pt solid var(--line); padding: 2pt 3.5pt; vertical-align: top; text-align: left; }
+th { background: #eef1f5; font-weight: bold; }
+tr { page-break-inside: avoid; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 7.6pt; background: #f2f4f7; padding: 0 1.5pt; border-radius: 1.5pt; }
+.sub { color: var(--muted); font-size: 8pt; }
+.meta { color: var(--muted); font-size: 8pt; margin-bottom: 6pt; }
+figure { margin: 4pt 0 7pt; page-break-inside: avoid; }
+figcaption { font-size: 7.8pt; color: var(--muted); margin-top: 2pt; }
+svg { width: 100%; height: auto; display: block; }
+.pend { background: var(--pend); border-left: 2.5pt solid #d79b00; padding: 3pt 6pt; margin: 3pt 0 6pt; }
+.own { background: var(--own); border-left: 2.5pt solid var(--agentS); padding: 3pt 6pt; margin: 3pt 0 6pt; }
+.own::before { content: "✎ draft reasoning, to be rewritten in the author's own words"; display: block; font-size: 7pt; color: var(--agentS); font-weight: bold; margin-bottom: 1.5pt; }
+.ok { color: #2d6a3a; font-weight: bold; } .bad { color: #a23b2d; font-weight: bold; }
+.pb { page-break-before: always; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+.small { font-size: 7.4pt; }
+a { color: #2f5fbf; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1>AutoSE: an agentic issue-to-pull-request workflow</h1>
+<div class="meta">Assignment 3, Automated Software Engineering · Roll no. 2025201064 · Fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> at upstream <code>f7ec702</code> · Submission repo <a href="https://github.com/QasimANaik/autose-a3">QasimANaik/autose-a3</a> · Agents: Gemini CLI 0.70.0 (headless) inside LangGraph 1.2.20 on GitHub Actions · Report state: 24 Nov 2026, after 8 workflow runs (1 complete)</div>
+
+<div class="pend"><b>Status of this report.</b> Sections 1, 2 and 6 describe the system as built. Sections 3 and 4 report only what has really been run: 8 workflow runs on issues #4 and #5, of which one (issue #4, run <a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a>) went through every stage. Rows marked <b>PENDING</b> (issues #1–#3 and #5 on the current workflow, the 5 seeded PRs, experiments E1 and E2) are filled in from <code>results/results.csv</code> once those runs exist. No result in this report is estimated or invented. Measured numbers come from the Gemini CLI usage files in the run artifacts.</div>
+
+<!-- ======================================================================= 1 -->
+<h2>1. Architecture</h2>
+<p>A maintainer who is OWNER, MEMBER or COLLABORATOR labels an issue <code>autose</code> or comments <code>/autose</code>. A <b>gate</b> job (no secrets, no model) accepts the trigger. The <b>build</b> job then runs a LangGraph <code>StateGraph</code> whose nodes are the six fixed stages:
+<ul>
+<li>Each <b>agent node</b> is one fresh headless <code>gemini -p</code> call. It gets only the artifacts it needs and has a role-specific tool policy.</li>
+<li>Every <b>check and every route</b> is plain Python. No model decides whether a stage passed or where the run goes next.</li>
+<li><b>Stage 4</b> fans out with <code>Send</code> to <b>parallel test workers</b>, one per acceptance-criterion group, each in its own git worktree, plus one e2e/regression worker.</li>
+<li>The <b>review</b> is a second, small LangGraph graph in its own job with a <b>read-only token</b>. It never receives the builder's artifacts.</li>
+<li>If changes are requested, the job graph runs the main graph once more (<code>rework-1</code>) and then <code>review-2</code>. That is at most two rounds, and the bot never merges.</li>
+</ul></p>
+
+<figure>
+<svg viewBox="0 0 760 560" role="img" aria-label="Component view">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b85450"/></marker>
+<marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7F00FF"/></marker></defs>
+<style>
+.t{font:bold 11.5px sans-serif;fill:#1b2330}.s{font:10.5px sans-serif;fill:#333}.m{font:9.5px monospace;fill:#444}.ct{fill:none;stroke:#888;stroke-dasharray:5 3}
+.lab{font:10px sans-serif;fill:#333}.labr{font:10px sans-serif;fill:#b85450}.labp{font:10px sans-serif;fill:#7F00FF}
+.ag{fill:#dae8fc;stroke:#6c8ebf}.cd{fill:#d5e8d4;stroke:#82b366}.wr{fill:#f8cecc;stroke:#b85450;stroke-width:2}.sb{fill:#e1d5e7;stroke:#9673a6}.hu{fill:#fff2cc;stroke:#d6b656}
+.e{stroke:#333;fill:none;stroke-width:1.2}.er{stroke:#b85450;fill:none;stroke-width:1.2;stroke-dasharray:4 3}.ep{stroke:#7F00FF;fill:none;stroke-width:1.2;stroke-dasharray:4 3}
+</style>
+<!-- GitHub (left) -->
+<text x="8" y="22" class="t">GitHub fork</text>
+<rect x="6" y="34" width="110" height="44" rx="5" class="hu"/><text x="13" y="52" class="t">Issue #N</text><text x="13" y="68" class="s">label / /autose</text>
+<rect x="6" y="100" width="110" height="56" rx="5" class="cd"/><text x="13" y="118" class="t">gate job</text><text x="13" y="133" class="s">trusted author?</text><text x="13" y="148" class="m">no secrets</text>
+<line x1="61" y1="78" x2="61" y2="98" class="e" marker-end="url(#a)"/>
+<path d="M 116,128 H 125 V 94 H 134" class="e" marker-end="url(#a)"/>
+<!-- build job -->
+<rect x="126" y="30" width="410" height="372" rx="6" class="ct"/>
+<text x="134" y="46" class="t">job build (+ rework-1): LangGraph main graph</text><text x="134" y="59" class="m">checkpoint per node · write token held by code only</text>
+<rect x="136" y="70" width="90" height="48" rx="5" class="cd"/><text x="142" y="88" class="t">intake</text><text x="142" y="104" class="s">branch, flags</text>
+<rect x="234" y="70" width="92" height="48" rx="5" class="ag"/><text x="240" y="88" class="t">1 understand</text><text x="240" y="104" class="s">A1 skill: spec</text>
+<rect x="334" y="70" width="92" height="48" rx="5" class="ag"/><text x="340" y="88" class="t">2 design</text><text x="340" y="104" class="s">+ ARCHITECT.</text>
+<rect x="434" y="70" width="92" height="48" rx="5" class="ag"/><text x="440" y="88" class="t">3 implement</text><text x="440" y="104" class="s">edits src/ only</text>
+<line x1="226" y1="94" x2="232" y2="94" class="e" marker-end="url(#a)"/><line x1="326" y1="94" x2="332" y2="94" class="e" marker-end="url(#a)"/><line x1="426" y1="94" x2="432" y2="94" class="e" marker-end="url(#a)"/>
+<rect x="234" y="150" width="92" height="40" rx="5" class="cd"/><text x="240" y="167" class="t">clarify</text><text x="240" y="182" class="s">not testable</text>
+<line x1="280" y1="118" x2="280" y2="148" class="ep" marker-end="url(#ap)"/>
+<rect x="434" y="150" width="92" height="48" rx="5" class="cd"/><text x="440" y="168" class="t">orchestrator</text><text x="440" y="184" class="s">group ACs</text>
+<line x1="480" y1="118" x2="480" y2="148" class="e" marker-end="url(#a)"/>
+<rect x="446" y="216" width="84" height="52" rx="5" class="sb" opacity=".5"/><rect x="440" y="221" width="86" height="52" rx="5" class="sb" opacity=".75"/>
+<rect x="434" y="226" width="92" height="52" rx="5" class="sb"/><text x="440" y="244" class="t">test worker ×N</text><text x="440" y="259" class="s">parallel, own</text><text x="440" y="272" class="s">worktree</text>
+<line x1="480" y1="198" x2="480" y2="212" class="ep" marker-end="url(#ap)"/><text x="484" y="209" class="labp">Send</text>
+<rect x="434" y="290" width="92" height="40" rx="5" class="sb"/><text x="440" y="307" class="t">e2e worker</text><text x="440" y="322" class="s">regression</text>
+<rect x="334" y="236" width="92" height="56" rx="5" class="cd"/><text x="340" y="254" class="t">4 merge</text><text x="340" y="269" class="s">full pytest,</text><text x="340" y="283" class="s">AC coverage</text>
+<line x1="434" y1="252" x2="428" y2="252" class="e" marker-end="url(#a)"/><path d="M 434,310 H 430 V 282 H 428" class="e" marker-end="url(#a)"/>
+<rect x="234" y="236" width="92" height="56" rx="5" class="wr"/><text x="240" y="254" class="t">5 release</text><text x="240" y="269" class="s">push, PR,</text><text x="240" y="283" class="s">wait for CI</text>
+<line x1="334" y1="264" x2="328" y2="264" class="e" marker-end="url(#a)"/>
+<path d="M 400,236 V 140 H 460 V 120" class="er" marker-end="url(#ar)"/><text x="404" y="135" class="labr">tests fail ≤2</text>
+<path d="M 356,236 V 120" class="er" marker-end="url(#ar)"/><text x="304" y="214" class="labr">redesign ≤1</text>
+<text x="398" y="350" class="labr">only new tests fail and the</text><text x="398" y="363" class="labr">implementer keeps its code:</text><text x="398" y="376" class="labr">re-check those tests once</text>
+<rect x="136" y="330" width="90" height="48" rx="5" class="cd"/><text x="142" y="348" class="t">stop</text><text x="142" y="364" class="s">reason → artifact</text>
+<text x="232" y="318" class="lab">retries, budget, outage → stop</text>
+<!-- review job -->
+<rect x="546" y="30" width="208" height="222" rx="6" class="ct" style="stroke:#b85450"/>
+<text x="554" y="46" class="t">job review-1 / review-2</text><text x="554" y="59" class="m">read-only token</text>
+<rect x="556" y="70" width="92" height="48" rx="5" class="cd"/><text x="562" y="88" class="t">intake_pr</text><text x="562" y="104" class="s">issue + diff</text>
+<rect x="654" y="70" width="92" height="48" rx="5" class="ag"/><text x="660" y="88" class="t">6 reviewer</text><text x="660" y="104" class="s">runs tests</text>
+<rect x="556" y="150" width="92" height="48" rx="5" class="cd"/><text x="562" y="168" class="t">judge</text><text x="562" y="184" class="s">evidence rule</text>
+<rect x="654" y="150" width="92" height="48" rx="5" class="cd"/><text x="660" y="168" class="t">render</text><text x="660" y="184" class="m">verdict.json</text>
+<line x1="648" y1="94" x2="652" y2="94" class="e" marker-end="url(#a)"/><path d="M 700,118 V 134 H 602 V 148" class="e" marker-end="url(#a)"/><line x1="648" y1="174" x2="652" y2="174" class="e" marker-end="url(#a)"/>
+<text x="556" y="222" class="s">never gets spec, design,</text><text x="556" y="236" class="s">tests report or transcripts</text>
+<rect x="556" y="270" width="92" height="48" rx="5" class="wr"/><text x="562" y="288" class="t">publish</text><text x="562" y="304" class="s">review + label</text>
+<rect x="654" y="270" width="92" height="48" rx="5" class="wr"/><text x="660" y="288" class="t">finalize</text><text x="660" y="304" class="s">summary</text>
+<path d="M 700,198 V 206 H 750 V 260 H 602 V 268" class="e" marker-end="url(#a)"/><line x1="648" y1="294" x2="652" y2="294" class="e" marker-end="url(#a)"/>
+<path d="M 556,300 H 541 V 64 H 470 V 68" class="ep" marker-end="url(#ap)"/><text x="300" y="12" class="labp">changes requested in round 1 → rework-1:</text><text x="300" y="24" class="labp">main graph again (code→3, approach→2)</text>
+<!-- PR bar + human -->
+<rect x="126" y="420" width="628" height="40" rx="5" class="hu"/><text x="136" y="438" class="t">GitHub pull request #N</text><text x="136" y="453" class="s">branch autose/issue-N, tests.yml CI, reviews, labels: a human merges or closes</text>
+<rect x="6" y="420" width="110" height="40" rx="5" class="hu"/><text x="13" y="438" class="t">Human</text><text x="13" y="453" class="s">merge / close</text>
+<line x1="280" y1="292" x2="280" y2="418" class="e" marker-end="url(#a)"/><text x="284" y="408" class="lab">open PR</text>
+<path d="M 740,420 V 62 H 602 V 68" class="e" marker-end="url(#a)"/>
+<line x1="602" y1="318" x2="602" y2="418" class="e" marker-end="url(#a)"/>
+<line x1="126" y1="440" x2="118" y2="440" class="e" marker-end="url(#a)"/>
+<!-- bottom band -->
+<rect x="6" y="478" width="748" height="72" rx="4" fill="#ffe6cc" stroke="#d79b00"/>
+<text x="14" y="496" class="s"><tspan font-weight="bold">Every agent node</tspan> = one fresh headless <tspan font-family="monospace">gemini -p</tspan> call, model gemini-3.5-flash-lite (fallback 3.1-flash-lite).</text>
+<text x="14" y="512" class="s">Env: PATH, HOME, GEMINI_API_KEY only (no GitHub token). Admin policy file: read / glob / grep / write / replace +</text>
+<text x="14" y="528" class="s"><tspan font-family="monospace">uv run pytest|ruff|mypy|python</tspan>; web, git push/commit, gh, curl denied. Edits outside the stage's folder</text>
+<text x="14" y="544" class="s">are reverted by code. 60 turns and 1200 s per call; 8M tokens per job.</text>
+</svg>
+<figcaption><b>Figure 1. Component view.</b> Green = code only, blue = agent call, purple = parallel subgraph, red = writes to GitHub, yellow = trigger / human. Dashed red = loop-backs chosen by code; dashed purple = conditional / <code>Send</code>. Full editable versions (every node, its function and its cost): <code>architecture/views/architecture.drawio</code>.</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 860 470" role="img" aria-label="Sequence view of run 45354704591">
+<style>.hd{font:bold 10.5px sans-serif;fill:#1b2330}.mg{font:11px sans-serif;fill:#222}.tm{font:10.5px monospace;fill:#2f5fbf}.ms{stroke:#333;stroke-width:1.1}.rt{stroke:#333;stroke-width:1;stroke-dasharray:4 3}.ll{stroke:#aaa;stroke-dasharray:3 3}</style>
+<defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
+<rect x="62" y="4" width="86" height="22" rx="4" fill="#fff2cc" stroke="#d6b656"/><text x="105" y="19" class="hd" text-anchor="middle">maintainer</text>
+<rect x="156" y="4" width="86" height="22" rx="4" fill="#d5e8d4" stroke="#82b366"/><text x="199" y="19" class="hd" text-anchor="middle">gate job</text>
+<rect x="250" y="4" width="86" height="22" rx="4" fill="#d5e8d4" stroke="#82b366"/><text x="293" y="19" class="hd" text-anchor="middle">main graph</text>
+<rect x="344" y="4" width="86" height="22" rx="4" fill="#dae8fc" stroke="#6c8ebf"/><text x="387" y="19" class="hd" text-anchor="middle">builder agents</text>
+<rect x="438" y="4" width="86" height="22" rx="4" fill="#e1d5e7" stroke="#9673a6"/><text x="481" y="19" class="hd" text-anchor="middle">test workers</text>
+<rect x="532" y="4" width="86" height="22" rx="4" fill="#f8cecc" stroke="#b85450"/><text x="575" y="19" class="hd" text-anchor="middle">PR + CI</text>
+<rect x="626" y="4" width="86" height="22" rx="4" fill="#dae8fc" stroke="#6c8ebf"/><text x="669" y="19" class="hd" text-anchor="middle">review graph</text>
+<rect x="720" y="4" width="86" height="22" rx="4" fill="#f8cecc" stroke="#b85450"/><text x="763" y="19" class="hd" text-anchor="middle">publish/final.</text>
+<g class="ll"><line x1="105" y1="26" x2="105" y2="440"/><line x1="199" y1="26" x2="199" y2="440"/><line x1="293" y1="26" x2="293" y2="440"/><line x1="387" y1="26" x2="387" y2="440"/><line x1="481" y1="26" x2="481" y2="440"/><line x1="575" y1="26" x2="575" y2="440"/><line x1="669" y1="26" x2="669" y2="440"/><line x1="763" y1="26" x2="763" y2="440"/></g>
+<text x="2" y="50" class="tm">08:16:38</text><line x1="105" y1="46" x2="197" y2="46" class="ms" marker-end="url(#b)"/><text x="110" y="42" class="mg">/autose on #4</text>
+<text x="2" y="76" class="tm">08:16:48</text><line x1="199" y1="72" x2="291" y2="72" class="ms" marker-end="url(#b)"/><text x="204" y="68" class="mg">OWNER ✓ build</text>
+<text x="2" y="102" class="tm">08:17:09</text><line x1="293" y1="98" x2="385" y2="98" class="ms" marker-end="url(#b)"/><text x="298" y="94" class="mg">intake → understand</text>
+<text x="2" y="128" class="tm">08:17:40</text><line x1="387" y1="124" x2="295" y2="124" class="rt" marker-end="url(#b)"/><text x="393" y="128" class="mg">spec.md: 6 ACs, AC lint ✓ (29.9 s)</text>
+<text x="2" y="154" class="tm">08:18:03</text><line x1="387" y1="150" x2="295" y2="150" class="rt" marker-end="url(#b)"/><text x="393" y="154" class="mg">design.md: files and functions exist ✓ (23.0 s)</text>
+<text x="2" y="180" class="tm">08:18:46</text><line x1="387" y1="176" x2="295" y2="176" class="rt" marker-end="url(#b)"/><text x="393" y="180" class="mg">src/mistune/toc.py: ruff, strict mypy ✓ (42.9 s)</text>
+<text x="2" y="206" class="tm">08:18:46</text><line x1="293" y1="202" x2="479" y2="202" class="ms" marker-end="url(#b)"/><text x="298" y="198" class="mg">orchestrator: Send 3 AC groups + e2e</text>
+<text x="2" y="232" class="tm">08:19:51</text><line x1="481" y1="228" x2="295" y2="228" class="rt" marker-end="url(#b)"/><text x="487" y="232" class="mg">4 WorkerResults (29–42 s each) → merge: suite ✓, 6/6 ACs</text>
+<text x="2" y="258" class="tm">08:19:51</text><line x1="293" y1="254" x2="573" y2="254" class="ms" marker-end="url(#b)"/><text x="298" y="250" class="mg">release: push branch, open PR #11, dispatch tests.yml</text>
+<text x="2" y="284" class="tm">08:23:26</text><line x1="575" y1="280" x2="295" y2="280" class="rt" marker-end="url(#b)"/><text x="300" y="276" class="mg">CI 45355186100 green (lint, docs, py3.11–3.15, pypy)</text>
+<text x="2" y="310" class="tm">08:23:32</text><line x1="575" y1="306" x2="667" y2="306" class="ms" marker-end="url(#b)"/><text x="580" y="302" class="mg">review-1</text>
+<text x="2" y="336" class="tm">08:24:10</text><line x1="669" y1="332" x2="761" y2="332" class="ms" marker-end="url(#b)"/><text x="380" y="336" class="mg">reviewer (15.8 s): pytest, ruff, mypy, issue example →</text><text x="674" y="328" class="mg">approve</text>
+<text x="2" y="362" class="tm">08:24:30</text><line x1="763" y1="358" x2="577" y2="358" class="rt" marker-end="url(#b)"/><text x="582" y="354" class="mg">review + label approved</text>
+<text x="2" y="388" class="tm">08:24:53</text><line x1="763" y1="384" x2="107" y2="384" class="rt" marker-end="url(#b)"/><text x="300" y="380" class="mg">finalize: summary on #4, label autose:done</text>
+<text x="2" y="414" class="tm">human</text><line x1="105" y1="410" x2="573" y2="410" class="ms" marker-end="url(#b)"/><text x="160" y="406" class="mg">a human merges or closes PR #11 (the bot never merges)</text>
+<text x="62" y="460" class="mg">Total 8 min 15 s · 8 agent calls · 2.00M input tokens (79% cached), 14.5k output · $0.21 · hidden tests 4/4</text>
+</svg>
+<figcaption><b>Figure 2. Sequence view of the real run 45354704591</b> (issue #4, <a href="https://github.com/QasimANaik/mistune/pull/11">PR #11</a>). Times are UTC from the job timings and the state events. Durations are measured agent-call times from <code>usage/*.json</code>.</figcaption>
+</figure>
+
+<table>
+<tr><th>#</th><th>Stage</th><th>Handled by</th><th>Input it gets</th><th>Artifact</th><th>Check before moving on (decided by code)</th><th>On failure</th></tr>
+<tr><td>1</td><td>Requirements</td><td>builder agent <code>understand</code> + A1 <i>requirements-spec</i> skill</td><td>issue in <code>&lt;untrusted_issue&gt;</code> tags</td><td><code>spec.md</code> (SRS/REG/VAL)</td><td>every AC has an id and Given/When/Then; no vague words (A1 validator's lexicon); A1 validator result recorded</td><td>retry 1, then <i>clarify</i> (questions, no code)</td></tr>
+<tr><td>2</td><td>Design</td><td>builder agent <code>design</code></td><td>SRS + ARCHITECTURE.md + repo</td><td><code>design.md</code></td><td>every named <code>src/</code> file and function exists (AST); new ones marked <code>(new)</code></td><td>retry 1, then stop</td></tr>
+<tr><td>3</td><td>Implementation</td><td>builder agent <code>implement</code></td><td>design + AC list (+ failures / review findings)</td><td><code>diff.patch</code></td><td>import, <code>ruff src</code>, strict <code>mypy</code>; edits outside <code>src/</code> reverted</td><td>retry 2, then stop</td></tr>
+<tr><td>4</td><td>Testing</td><td>orchestrator (code) + parallel <code>criterion_worker</code>×N + <code>e2e_worker</code>, merged by <code>merge</code> (code)</td><td>each worker: its ACs + src diff, own worktree</td><td><code>test_report.md</code></td><td>full suite green; every AC id cited by a test; new tests ruff-clean</td><td>→3 (≤2), dispute → re-check tests (≤1), →2 (≤1), stop</td></tr>
+<tr><td>5</td><td>Release</td><td><code>release</code> (code, <code>gh</code>)</td><td>branch + artifacts</td><td><code>pr.md</code> + PR link</td><td>PR open and <code>tests.yml</code> green (failed jobs re-run once for flaky timing tests)</td><td>→3 once, stop</td></tr>
+<tr><td>6</td><td>Review</td><td>independent <code>reviewer</code> in its own read-only job; <code>judge</code> (code)</td><td>issue + PR diff + PR-head checkout only</td><td><code>review.md</code> + <code>verdict.json</code></td><td>approve, or two rounds used; unevidenced findings dropped</td><td>code→3 / approach→2 in <code>rework-1</code></td></tr>
+</table>
+
+<!-- ======================================================================= 2 -->
+<h2 class="pb">2. Design decisions</h2>
+<p class="sub">Full ADRs in Nygard format are in <code>architecture/decisions/</code>. Three ADRs were superseded after real runs and kept as the assignment requires. "Main reason" is the short form; the evidence is in each ADR.</p>
+<table class="small">
+<tr><th>ADR</th><th>Decision (area)</th><th>Chosen option</th><th>Main rejected option</th><th>Main reason</th><th>Status</th></tr>
+<tr><td>001</td><td>Splitting the work (D1)</td><td>one builder role, one call per stage, + one reviewer</td><td>one agent for all stages</td><td>fresh small contexts; independent reviewer</td><td>Superseded by 011</td></tr>
+<tr><td>002</td><td>Control flow (D2)</td><td>hand-written Python state machine; review rounds unrolled as jobs</td><td>LLM planner choosing the next stage</td><td>loops must be bounded and decided by code</td><td>Superseded by 012</td></tr>
+<tr><td>003</td><td>Hand-offs (D3)</td><td>full artifact files chosen per stage; reviewer gets none</td><td>transcripts / LLM summaries</td><td>auditable, no reasoning leaks to the reviewer</td><td>Proposed (E2)</td></tr>
+<tr><td>004</td><td>State (D4)</td><td>state.json in artifacts, fresh start on re-run</td><td>files on the PR branch</td><td>reviewer must not see builder state</td><td>Superseded by 013</td></tr>
+<tr><td>005</td><td>Tools (D5)</td><td>Gemini CLI built-ins limited by an admin policy file per role; GitHub only via <code>gh</code> in code</td><td>GitHub MCP server for agents</td><td>a hijacked agent cannot push, comment or approve</td><td>Proposed</td></tr>
+<tr><td>006</td><td>Models (D6)</td><td>Flash builder + Pro reviewer</td><td>same model everywhere</td><td>reviewer diversity</td><td>Superseded by 014</td></tr>
+<tr><td>007</td><td>Checks (D7)</td><td>deterministic code checks; reviewer verdict the only model decision</td><td>LLM judge per stage</td><td>reproducible, cheap, no self-grading</td><td>Proposed</td></tr>
+<tr><td>008</td><td>Reviewer independence (D8)</td><td>own job + read-only token + own prompt + no builder artifacts + evidence rule (judge)</td><td>same agent reviews its own work</td><td>independence enforced by permissions, not only instructions</td><td>Proposed (E1)</td></tr>
+<tr><td>009</td><td>Safety and failures (D9)</td><td>trusted triggers, untrusted tags, no tokens in agents, role reverts, budgets, outage = stop</td><td>trusting the model to ignore injected text</td><td>layered limits on damage</td><td>Proposed</td></tr>
+<tr><td>010</td><td>Triggers (D10)</td><td>label / <code>/autose</code> from OWNER/MEMBER/COLLABORATOR; queued concurrency per issue</td><td>any comment from anyone</td><td>anyone can write an issue</td><td>Proposed</td></tr>
+<tr><td>011</td><td>Splitting the work (D1)</td><td>stages 1–3 sequential; stage 4 = parallel test workers per AC group + e2e</td><td>parallel implementation workers</td><td>parallel edits to the same files conflict; tests do not</td><td>Proposed</td></tr>
+<tr><td>012</td><td>Control flow (D2)</td><td>LangGraph StateGraph, routes are Python functions over check results</td><td>keep the hand-written state machine</td><td>fan-out/fan-in and checkpoints from the framework; maintainers already use it (SpecBridge)</td><td>Proposed</td></tr>
+<tr><td>013</td><td>State (D4)</td><td>SQLite checkpoint per node, carried as artifact; resume restores code from <code>patch</code></td><td>fresh start on every re-run</td><td>a late crash does not repeat paid stages</td><td>Proposed</td></tr>
+<tr><td>014</td><td>Models (D6)</td><td>gemini-3.5-flash-lite for every agent node, 3.1-flash-lite fallback</td><td>Flash builder + Pro reviewer (006)</td><td>about 3× cheaper; Pro has no free tier; reviewer allowed to share the model</td><td>Accepted</td></tr>
+</table>
+
+<h3>2.1 The three decisions that mattered most</h3>
+<div class="own">
+<p><b>(1) Every check and route is code, not a model (ADR-007, ADR-012).</b> Each failed run stopped at a precise place with a reason in the stage's artifact. That turned every failure into a concrete fix: run 3 → <a href="https://github.com/QasimANaik/mistune/pull/7">PR #7</a>, run 4 → PR #7, run 6 → <a href="https://github.com/QasimANaik/mistune/pull/9">PR #9</a>, run 7 → <a href="https://github.com/QasimANaik/mistune/pull/10">PR #10</a>. The same runs also exposed the cost of this decision. A code check is only as good as its rules. Four of the five failed runs were stopped by our own checks or routes, not by bad agent output:
+<ul>
+<li>a model outage counted as a spec failure (run 3);</li>
+<li><code>ruff .</code> blamed the implementer for the workers' files (run 4);</li>
+<li>no route existed for "the test is wrong" (run 6);</li>
+<li>a parser rejected <code>(new)</code> inside backticks (run 7).</li>
+</ul>
+Deterministic checks are cheap and reproducible, but each one needs a clear owner: which stage may fix what it checks.</p>
+<p><b>(2) Role separation enforced in code, with parallel test workers (ADR-005, ADR-011).</b> The implementer may only change <code>src/</code> and the workers only their own test file. Everything else is reverted after the call. In run 4 this stopped the implementer from editing <code>tests/fixtures/math.txt</code> and two generated tests to make failing tests pass. Splitting stage 4 into one worker per acceptance-criterion group kept each context small: 230–340k tokens per worker in run 8. The cost of separation showed in run 6: a worker faithfully tested a <i>wrong</i> acceptance criterion, and the implementer could not touch tests. That needed a new route, <code>loop_dispute</code>: when only new tests fail and the implementer keeps its code, exactly those test files are re-checked once, and a persisting disagreement goes to a human.</p>
+<p><b>(3) One cheap model everywhere, with independence carried by the job (ADR-014, ADR-008).</b> Price data and two failed model calls (a 429 and a retired fallback) moved the design from Flash + Pro to <code>gemini-3.5-flash-lite</code> everywhere. The complete run cost $0.21. Because the assignment does not require a different reviewer model, the reviewer's independence now rests on things a model cannot override:
+<ul>
+<li>its own job with a read-only token;</li>
+<li>no builder artifacts, transcripts or PR body;</li>
+<li>its own adversarial prompt;</li>
+<li>a code judge that drops findings without evidence and rejects an "approve" that lists no checks.</li>
+</ul>
+The open risk is correlated blind spots between builder and reviewer. Experiment E1 and the seeded PRs exist to measure it.</p>
+</div>
+
+<!-- ======================================================================= 3 -->
+<h2>3. Decision experiments</h2>
+<p>Two ADRs are tested with controlled variants. Each variant is a <code>config.toml</code> entry selected by the workflow input <code>variant</code>, so the code is identical between arms (<code>experiment/variants.md</code>).</p>
+<div class="two">
+<div>
+<h3>E1: ADR-008, reviewer independence</h3>
+<p><b>Arms:</b> <i>baseline</i> reviewer (runs code; adversarial checklist; evidence rule) vs <code>weak_reviewer</code> (read-only policy, cannot run anything; plain prompt). The model is the same in both arms after ADR-014.<br><b>Data:</b> 5 seeded PRs: 4 with planted defects (wrong edge case, removed HTML escaping, a test that asserts nothing, a fix in the wrong layer) and 1 clean fix. <b>Metric:</b> defects caught (of 4), false rejection of the clean PR, cost per review.</p>
+<table><tr><th>Seeded PR</th><th>Expected</th><th>baseline</th><th>weak_reviewer</th></tr>
+<tr><td>sp-1 edge case</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-2 escaping (XSS)</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-3 empty test</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-4 wrong layer</td><td>request changes (approach)</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-5 clean</td><td>approve</td><td>PENDING</td><td>PENDING</td></tr></table>
+</div>
+<div>
+<h3>E2: ADR-003, hand-offs (ARCHITECTURE.md)</h3>
+<p><b>Arms:</b> <i>baseline</i> design stage reads ARCHITECTURE.md vs <code>no_arch</code> (file hidden from every agent via <code>git update-index --skip-worktree</code>). Runs use <code>stop_after=design</code> to save cost.<br><b>Data:</b> issues #1–#5 × 2 arms. <b>Metric:</b> design check passes first time; files named vs the files the reference fix changes; design tokens.</p>
+<table><tr><th>Issue</th><th>baseline: 1st-try pass / files right / tokens</th><th>no_arch: same</th></tr>
+<tr><td>#1 table</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>#2 url</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>#3 rel</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>#4 toc</td><td>run 8: ✓ 1st try, <code>src/mistune/toc.py</code> ✓, 232k</td><td>PENDING</td></tr>
+<tr><td>#5 math</td><td>run 4: ✓ 1st try, 366k</td><td>PENDING</td></tr></table>
+</div>
+</div>
+<div class="pend"><b>PENDING.</b> E1 and E2 have not been run yet. The tables above show the protocol and the two baseline data points that already exist from normal runs. <b>Design changes already driven by run evidence</b> (not by these experiments): PR #7 (outage handling, ruff scope, 8M token cap), PR #8 (ADR-006 → ADR-014), PR #9 (<code>loop_dispute</code>), PR #10 (design-check parser).</div>
+
+<!-- ======================================================================= 4 -->
+<h2>4. Results</h2>
+<p>Eight workflow runs so far (<code>results/runs.md</code>). One was a skipped non-command comment and two were cancelled by hand. The table counts the five runs that started the pipeline, by how far each stage got. The workflow changed between runs (PRs #7–#10), so these are not repeated trials of one system.</p>
+<table>
+<tr><th>Stage</th><th>Reached</th><th>Passed (eventually)</th><th>Passed on 1st attempt</th><th>Why it did not pass</th></tr>
+<tr><td>1 Requirements</td><td>5</td><td>4</td><td>4</td><td>run 3: model unavailable (429 + retired fallback)</td></tr>
+<tr><td>2 Design</td><td>4</td><td>3</td><td>3</td><td>run 7: check parser rejected <code>(new)</code> inside backticks</td></tr>
+<tr><td>3 Implementation</td><td>3</td><td>2</td><td>2 (run 4 needed retries later)</td><td>run 4: 12 existing tests broken; later attempts failed a ruff check on files it may not edit; token cap</td></tr>
+<tr><td>4 Testing</td><td>3</td><td>1</td><td>1</td><td>run 4: over-broad change; run 6: wrong AC tested literally</td></tr>
+<tr><td>5 Release</td><td>1</td><td>1</td><td>1</td><td>–</td></tr>
+<tr><td>6 Review</td><td>1</td><td>approve</td><td>1</td><td>–</td></tr>
+</table>
+<div class="two">
+<div>
+<h3>Hidden acceptance tests (kept outside the fork)</h3>
+<table><tr><th>Issue</th><th>Hidden tests</th><th>Result</th></tr>
+<tr><td>#4 ordered TOC</td><td>4 (3 fail on <code>f7ec702</code>)</td><td class="ok">4/4 on PR #11. Run 6's unreleased diff also scored 4/4</td></tr>
+<tr><td>#1 table cells</td><td>4</td><td>PENDING</td></tr>
+<tr><td>#2 url plugin</td><td>4</td><td>PENDING</td></tr>
+<tr><td>#3 link rel</td><td>4</td><td>PENDING</td></tr>
+<tr><td>#5 math (vague)</td><td>4</td><td>PENDING (run 4 stopped)</td></tr></table>
+</div>
+<div>
+<h3>Reviewer, and cost</h3>
+<p><b>Caught / wrong:</b> one review so far. It approved PR #11 after running pytest (1338 passed), ruff, mypy and the issue's example. The hidden tests (4/4) agree, so it was right. It has not yet faced a defective PR; the seeded PRs (E1) measure that. <span class="bad">PENDING</span>.</p>
+<p><b>Cost:</b> 36 agent calls, 10.58M input tokens (79% cached), 71.5k output tokens, <b>about $1.33 in total</b>. The complete run cost <b>$0.21</b>: build $0.194 + review $0.013, 8 min 15 s. The wasted runs cost $0.08–$0.66 each. Output tokens are under 1% of tokens, so cost is driven by turns × re-sent context, not by answers.</p>
+</div>
+</div>
+
+<!-- ======================================================================= 5 -->
+<h2>5. Hindsight</h2>
+<div class="own"><p>If I started again tomorrow, the first decision I would change is <b>how failures are classified (ADR-007 and ADR-009)</b>. I would design the failure taxonomy before the checks. Every stop should say whose fault it is (provider, our check, the test, the code, the requirement) and which stage owns the fix. In this project that knowledge arrived one failed run at a time: outage vs spec failure (PR #7), check scope vs stage permissions (PR #7), "the test is wrong" (PR #9), format strictness (PR #10). Each fix was small, but each cost a full run. A second change, close behind: write the tests <i>before</i> the implementation, from the spec. A wrong acceptance criterion (run 6) would then surface before any code exists, rather than as an implement/test disagreement at the end.</p></div>
+
+<!-- ======================================================================= 6 -->
+<h2>6. Limitations and threats to validity</h2>
+<ol>
+<li><b>Very small sample.</b> One complete run, one issue fully resolved, one review. Pass rates per stage rest on 1–5 observations and no repetitions. LLM output is not deterministic, so the same issue can pass or fail on a re-run.</li>
+<li><b>The system changed between runs.</b> PRs #7–#10 and a model change landed between runs 3 and 8, so the runs are a development history, not trials of one fixed system. Stage pass rates mix several versions.</li>
+<li><b>Author bias.</b> The same person wrote the issues, the hidden tests, the seeded defects and the workflow. The issues were chosen to be solvable in one or two files of a small, well-tested library, which favours the pipeline. Results may not transfer to larger or less tested repositories.</li>
+<li><b>Same model for builder and reviewer</b> (ADR-014). Errors may be correlated. The reviewer's single approval so far says nothing about its ability to catch defects, which E1 still has to measure.</li>
+<li><b>Cost figures</b> use Gemini paid-tier list prices (gemini-3.5-flash-lite $0.30 / $0.03 / $2.50 per 1M tokens) applied to the usage files. Free-tier calls were not actually billed, and implicit-cache hit rates (69–82%) vary between runs.</li>
+<li><b>Untested safety paths.</b> Resuming from a checkpoint, the dispute route and the prompt-injection defences were tested with local simulations (faked model and GitHub), not yet in a real Actions run. Injection was only observed as flagged phrases in a simulated issue.</li>
+</ol>
+
+<!-- ======================================================================= Appendix -->
+<h2 class="pb">Appendix A. All runs</h2>
+<table class="small">
+<tr><th>#</th><th>Run</th><th>Issue</th><th>Model</th><th>Outcome</th><th>Calls</th><th>Tokens in (cached) / out</th><th>Cost</th><th>Finding → change</th></tr>
+<tr><td>1</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45234284925">45234284925</a></td><td>#5</td><td>–</td><td>skipped</td><td>0</td><td>–</td><td>$0</td><td>non-command comment ignored by the gate</td></tr>
+<tr><td>2</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45234300084">45234300084</a></td><td>#5</td><td>3-flash-preview</td><td>cancelled</td><td>–</td><td>–</td><td>–</td><td>cancelled by hand</td></tr>
+<tr><td>3</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45236521564">45236521564</a></td><td>#5</td><td>3-flash-preview</td><td>stopped at spec</td><td>4</td><td>0</td><td>$0</td><td>429 + retired fallback scored as spec failure → PR #7</td></tr>
+<tr><td>4</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45347324270">45347324270</a></td><td>#5</td><td>3-flash-preview</td><td>stopped at implement</td><td>10</td><td>4.16M (81%) / 31k</td><td>$0.66</td><td>over-broad change; test edits reverted; ruff scope; 4M cap → PR #7</td></tr>
+<tr><td>5</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45350365755">45350365755</a></td><td>#4</td><td>3.5-flash-lite</td><td>cancelled</td><td>–</td><td>–</td><td>–</td><td>cancelled by hand</td></tr>
+<tr><td>6</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45351202045">45351202045</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped at test</td><td>11</td><td>3.63M (77%) / 19k</td><td>$0.38</td><td>correct code, wrong AC → PR #9 <code>loop_dispute</code></td></tr>
+<tr><td>7</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45353435408">45353435408</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped at design</td><td>3</td><td>0.80M (82%) / 7k</td><td>$0.08</td><td>parser strictness → PR #10</td></tr>
+<tr><td>8</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a></td><td>#4</td><td>3.5-flash-lite</td><td class="ok">PR #11, approved</td><td>8</td><td>2.00M (79%) / 15k</td><td>$0.21</td><td>all stages first time; hidden 4/4</td></tr>
+</table>
+
+<h2>Appendix B. Run 8, per agent call (measured)</h2>
+<table class="small">
+<tr><th>Call</th><th>Turns (tool calls)</th><th>Input</th><th>Cached</th><th>Output</th><th>Time</th><th>Cost</th></tr>
+<tr><td>understand (spec)</td><td>14</td><td>230,931</td><td>177,180</td><td>4,455</td><td>29.9 s</td><td>$0.033</td></tr>
+<tr><td>design</td><td>11</td><td>231,795</td><td>185,155</td><td>854</td><td>23.0 s</td><td>$0.022</td></tr>
+<tr><td>implement</td><td>22</td><td>305,571</td><td>249,677</td><td>2,176</td><td>42.9 s</td><td>$0.030</td></tr>
+<tr><td>worker fr002 (3 ACs)</td><td>16</td><td>340,397</td><td>278,318</td><td>2,028</td><td>39.9 s</td><td>$0.032</td></tr>
+<tr><td>worker fr001 (2 ACs)</td><td>14</td><td>274,711</td><td>221,381</td><td>1,346</td><td>41.7 s</td><td>$0.026</td></tr>
+<tr><td>worker nfr001</td><td>14</td><td>266,580</td><td>209,135</td><td>1,057</td><td>30.3 s</td><td>$0.026</td></tr>
+<tr><td>e2e worker</td><td>12</td><td>246,728</td><td>197,178</td><td>2,078</td><td>28.8 s</td><td>$0.026</td></tr>
+<tr><td>reviewer</td><td>5</td><td>100,455</td><td>69,230</td><td>539</td><td>15.8 s</td><td>$0.013</td></tr>
+</table>
+
+<h2>Appendix C. Reproducibility, safety settings, AI use</h2>
+<ul>
+<li><b>Target:</b> fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> pinned at upstream <code>f7ec702edfc1ad5579a76f881238841af266d93c</code>. Workflow and agent code: <code>workflow/</code> (copy of <code>.github/workflows/autose.yml</code> and <code>autose/</code>), with the history of PRs #6–#10 in the fork.</li>
+<li><b>Branch protection:</b> ruleset <code>protect-main</code> (no deletion or force push; a PR with 1 code-owner approval is required; admin bypass for pull requests only). CODEOWNERS = the author, so a bot approval can never satisfy the merge rule. <i>Screenshot: appendix image (to add).</i></li>
+<li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 60-turn limit and a 1200 s limit per agent call. <i>Budget alert screenshot: appendix image (to add).</i></li>
+<li><b>Local evidence:</b> <code>experiment/scripts/sim/</code> replays the graph with a fake model: happy path, build retry, crash and resume, review judge, rework, clarify, model outage, and test dispute (a replay of run 6 with its real diff).</li>
+<li><b>AI use:</b> the workflow code, prompts, draw.io generators, simulations and the drafts of this report were written with the help of an AI coding assistant (Claude Code) and reviewed by the author. Text marked "✎ draft reasoning" and the "Rationale" sections of the ADRs must be in the author's own words, as the course policy requires.</li>
+</ul>
+</body>
+</html>
