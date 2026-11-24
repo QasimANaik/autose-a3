@@ -1,0 +1,30 @@
+FF..                                                                     [100%]
+=================================== FAILURES ===================================
+________________________ test_www_address_becomes_link _________________________
+
+    def test_www_address_becomes_link():
+        html = md("docs are at www.example.com/docs now")
+>       assert re.search(r'<a href="https?://www\.example\.com/docs">www\.example\.com/docs</a> now', html), html
+E       AssertionError: <p>docs are at www.example.com/docs now</p>
+E         
+E       assert None
+E        +  where None = <function search at 0x743f234872e0>('<a href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a> now', '<p>docs are at www.example.com/docs now</p>\n')
+E        +    where <function search at 0x743f234872e0> = re.search
+
+tests/test_hidden_issue18.py:16: AssertionError
+____________________ test_www_trailing_punctuation_excluded ____________________
+
+    def test_www_trailing_punctuation_excluded():
+        html = md("see www.example.com/docs, or later.")
+>       assert re.search(r'href="https?://www\.example\.com/docs">www\.example\.com/docs</a>,', html), html
+E       AssertionError: <p>see www.example.com/docs, or later.</p>
+E         
+E       assert None
+E        +  where None = <function search at 0x743f234872e0>('href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a>,', '<p>see www.example.com/docs, or later.</p>\n')
+E        +    where <function search at 0x743f234872e0> = re.search
+
+tests/test_hidden_issue18.py:21: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_hidden_issue18.py::test_www_address_becomes_link - Assertio...
+FAILED tests/test_hidden_issue18.py::test_www_trailing_punctuation_excluded
+2 failed, 2 passed in 0.07s

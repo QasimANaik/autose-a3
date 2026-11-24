@@ -1,4 +1,5 @@
 <!-- title: Math breaks my page layout -->
+<!-- CLOSED 2026-11-24 (not planned): replaced by issue-18.md as the vague issue; runs kept as evidence -->
 Since switching our blog to mistune with the `math` plugin, some posts look broken: the paragraph is split in two and the rest of the text jumps below the equation, and our HTML validator complains about the page.
 
 It seems to happen in posts where authors write equations in the middle of a sentence, like

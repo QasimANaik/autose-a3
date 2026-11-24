@@ -23,6 +23,6 @@ Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistun
 Artifacts of runs 7 and 8 are copied to `results/artifacts/` (GitHub keeps them 90 days).
 
 ## Still to run
-- Issue #1 again after PR #14; issues #2, #3 and #5 (with the current workflow).
+- Issue #1 again after PRs #14/#15; issue #2; **issue #18** (vague, replaces #5 which was closed as not planned).
 - 5 seeded PRs for the reviewer (`/autose review`), baseline and `weak_reviewer` (experiment E1).
 - Experiment E2: design stage with vs without ARCHITECTURE.md (`variant=no_arch`, `stop_after=design`).
