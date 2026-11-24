@@ -1,0 +1,28 @@
+{
+  "name": "build-w02-c2r1",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_s": 18.8,
+  "tool_calls": 9,
+  "denied_tool_calls": 0,
+  "stats": {
+    "total_tokens": 164803,
+    "input_tokens": 161580,
+    "output_tokens": 1872,
+    "cached": 107707,
+    "input": 53873,
+    "duration_ms": 16050,
+    "tool_calls": 9,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 164803,
+        "input_tokens": 161580,
+        "output_tokens": 1872,
+        "cached": 107707,
+        "input": 53873
+      }
+    }
+  },
+  "error": ""
+}

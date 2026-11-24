@@ -1,0 +1,28 @@
+{
+  "name": "review1-1-fallback",
+  "model": "gemini-3.1-flash-lite",
+  "exit_code": 146,
+  "timed_out": false,
+  "duration_s": 1.4,
+  "tool_calls": 0,
+  "denied_tool_calls": 0,
+  "stats": {
+    "total_tokens": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached": 0,
+    "input": 0,
+    "duration_ms": 0,
+    "tool_calls": 0,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached": 0,
+        "input": 0
+      }
+    }
+  },
+  "error": "[API Error: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay.] | status: 402"
+}

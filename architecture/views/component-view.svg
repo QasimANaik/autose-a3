@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="560" viewBox="0 0 760 560" role="img" aria-label="Component view"><rect width="100%" height="100%" fill="#ffffff"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b85450"/></marker>
+<marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7F00FF"/></marker></defs>
+<style>
+.t{font:bold 11.5px sans-serif;fill:#1b2330}.s{font:10.5px sans-serif;fill:#333}.m{font:9.5px monospace;fill:#444}.ct{fill:none;stroke:#888;stroke-dasharray:5 3}
+.lab{font:10px sans-serif;fill:#333}.labr{font:10px sans-serif;fill:#b85450}.labp{font:10px sans-serif;fill:#7F00FF}
+.ag{fill:#dae8fc;stroke:#6c8ebf}.cd{fill:#d5e8d4;stroke:#82b366}.wr{fill:#f8cecc;stroke:#b85450;stroke-width:2}.sb{fill:#e1d5e7;stroke:#9673a6}.hu{fill:#fff2cc;stroke:#d6b656}
+.e{stroke:#333;fill:none;stroke-width:1.2}.er{stroke:#b85450;fill:none;stroke-width:1.2;stroke-dasharray:4 3}.ep{stroke:#7F00FF;fill:none;stroke-width:1.2;stroke-dasharray:4 3}
+</style>
+<!-- GitHub (left) -->
+<text x="8" y="22" class="t">GitHub fork</text>
+<rect x="6" y="34" width="110" height="44" rx="5" class="hu"/><text x="13" y="52" class="t">Issue #N</text><text x="13" y="68" class="s">label / /autose</text>
+<rect x="6" y="100" width="110" height="56" rx="5" class="cd"/><text x="13" y="118" class="t">gate job</text><text x="13" y="133" class="s">trusted author?</text><text x="13" y="148" class="m">no secrets</text>
+<line x1="61" y1="78" x2="61" y2="98" class="e" marker-end="url(#a)"/>
+<path d="M 116,128 H 125 V 94 H 134" class="e" marker-end="url(#a)"/>
+<!-- build job -->
+<rect x="126" y="30" width="410" height="372" rx="6" class="ct"/>
+<text x="134" y="46" class="t">job build (+ rework-1): LangGraph main graph</text><text x="134" y="59" class="m">checkpoint per node · write token held by code only</text>
+<rect x="136" y="70" width="90" height="48" rx="5" class="cd"/><text x="142" y="88" class="t">intake</text><text x="142" y="104" class="s">branch, flags</text>
+<rect x="234" y="70" width="92" height="48" rx="5" class="ag"/><text x="240" y="88" class="t">1 understand</text><text x="240" y="104" class="s">A1 skill: spec</text>
+<rect x="334" y="70" width="92" height="48" rx="5" class="ag"/><text x="340" y="88" class="t">2 design</text><text x="340" y="104" class="s">+ ARCHITECT.</text>
+<rect x="434" y="70" width="92" height="48" rx="5" class="ag"/><text x="440" y="88" class="t">3 implement</text><text x="440" y="104" class="s">edits src/ only</text>
+<line x1="226" y1="94" x2="232" y2="94" class="e" marker-end="url(#a)"/><line x1="326" y1="94" x2="332" y2="94" class="e" marker-end="url(#a)"/><line x1="426" y1="94" x2="432" y2="94" class="e" marker-end="url(#a)"/>
+<rect x="234" y="150" width="92" height="40" rx="5" class="cd"/><text x="240" y="167" class="t">clarify</text><text x="240" y="182" class="s">not testable</text>
+<line x1="280" y1="118" x2="280" y2="148" class="ep" marker-end="url(#ap)"/>
+<rect x="434" y="150" width="92" height="48" rx="5" class="cd"/><text x="440" y="168" class="t">orchestrator</text><text x="440" y="184" class="s">group ACs</text>
+<line x1="480" y1="118" x2="480" y2="148" class="e" marker-end="url(#a)"/>
+<rect x="446" y="216" width="84" height="52" rx="5" class="sb" opacity=".5"/><rect x="440" y="221" width="86" height="52" rx="5" class="sb" opacity=".75"/>
+<rect x="434" y="226" width="92" height="52" rx="5" class="sb"/><text x="440" y="244" class="t">test worker ×N</text><text x="440" y="259" class="s">parallel, own</text><text x="440" y="272" class="s">worktree</text>
+<line x1="480" y1="198" x2="480" y2="212" class="ep" marker-end="url(#ap)"/><text x="484" y="209" class="labp">Send</text>
+<rect x="434" y="290" width="92" height="40" rx="5" class="sb"/><text x="440" y="307" class="t">e2e worker</text><text x="440" y="322" class="s">regression</text>
+<rect x="334" y="236" width="92" height="56" rx="5" class="cd"/><text x="340" y="254" class="t">4 merge</text><text x="340" y="269" class="s">full pytest,</text><text x="340" y="283" class="s">AC coverage</text>
+<line x1="434" y1="252" x2="428" y2="252" class="e" marker-end="url(#a)"/><path d="M 434,310 H 430 V 282 H 428" class="e" marker-end="url(#a)"/>
+<rect x="234" y="236" width="92" height="56" rx="5" class="wr"/><text x="240" y="254" class="t">5 release</text><text x="240" y="269" class="s">push, PR,</text><text x="240" y="283" class="s">wait for CI</text>
+<line x1="334" y1="264" x2="328" y2="264" class="e" marker-end="url(#a)"/>
+<path d="M 400,236 V 140 H 460 V 120" class="er" marker-end="url(#ar)"/><text x="404" y="135" class="labr">tests fail ≤2</text>
+<path d="M 356,236 V 120" class="er" marker-end="url(#ar)"/><text x="304" y="214" class="labr">redesign ≤1</text>
+<text x="398" y="350" class="labr">only new tests fail and the</text><text x="398" y="363" class="labr">implementer keeps its code:</text><text x="398" y="376" class="labr">re-check those tests once</text>
+<rect x="136" y="330" width="90" height="48" rx="5" class="cd"/><text x="142" y="348" class="t">stop</text><text x="142" y="364" class="s">reason → artifact</text>
+<text x="232" y="318" class="lab">retries, budget, outage → stop</text>
+<!-- review job -->
+<rect x="546" y="30" width="208" height="222" rx="6" class="ct" style="stroke:#b85450"/>
+<text x="554" y="46" class="t">job review-1 / review-2</text><text x="554" y="59" class="m">read-only token</text>
+<rect x="556" y="70" width="92" height="48" rx="5" class="cd"/><text x="562" y="88" class="t">intake_pr</text><text x="562" y="104" class="s">issue + diff</text>
+<rect x="654" y="70" width="92" height="48" rx="5" class="ag"/><text x="660" y="88" class="t">6 reviewer</text><text x="660" y="104" class="s">runs tests</text>
+<rect x="556" y="150" width="92" height="48" rx="5" class="cd"/><text x="562" y="168" class="t">judge</text><text x="562" y="184" class="s">evidence rule</text>
+<rect x="654" y="150" width="92" height="48" rx="5" class="cd"/><text x="660" y="168" class="t">render</text><text x="660" y="184" class="m">verdict.json</text>
+<line x1="648" y1="94" x2="652" y2="94" class="e" marker-end="url(#a)"/><path d="M 700,118 V 134 H 602 V 148" class="e" marker-end="url(#a)"/><line x1="648" y1="174" x2="652" y2="174" class="e" marker-end="url(#a)"/>
+<text x="556" y="222" class="s">never gets spec, design,</text><text x="556" y="236" class="s">tests report or transcripts</text>
+<rect x="556" y="270" width="92" height="48" rx="5" class="wr"/><text x="562" y="288" class="t">publish</text><text x="562" y="304" class="s">review + label</text>
+<rect x="654" y="270" width="92" height="48" rx="5" class="wr"/><text x="660" y="288" class="t">finalize</text><text x="660" y="304" class="s">summary</text>
+<path d="M 700,198 V 206 H 750 V 260 H 602 V 268" class="e" marker-end="url(#a)"/><line x1="648" y1="294" x2="652" y2="294" class="e" marker-end="url(#a)"/>
+<path d="M 556,300 H 541 V 64 H 470 V 68" class="ep" marker-end="url(#ap)"/><text x="300" y="12" class="labp">changes requested in round 1 → rework-1:</text><text x="300" y="24" class="labp">main graph again (code→3, approach→2)</text>
+<!-- PR bar + human -->
+<rect x="126" y="420" width="628" height="40" rx="5" class="hu"/><text x="136" y="438" class="t">GitHub pull request #N</text><text x="136" y="453" class="s">branch autose/issue-N, tests.yml CI, reviews, labels: a human merges or closes</text>
+<rect x="6" y="420" width="110" height="40" rx="5" class="hu"/><text x="13" y="438" class="t">Human</text><text x="13" y="453" class="s">merge / close</text>
+<line x1="280" y1="292" x2="280" y2="418" class="e" marker-end="url(#a)"/><text x="284" y="408" class="lab">open PR</text>
+<path d="M 740,420 V 62 H 602 V 68" class="e" marker-end="url(#a)"/>
+<line x1="602" y1="318" x2="602" y2="418" class="e" marker-end="url(#a)"/>
+<line x1="126" y1="440" x2="118" y2="440" class="e" marker-end="url(#a)"/>
+<!-- bottom band -->
+<rect x="6" y="478" width="748" height="72" rx="4" fill="#ffe6cc" stroke="#d79b00"/>
+<text x="14" y="496" class="s"><tspan font-weight="bold">Every agent node</tspan> = one fresh headless <tspan font-family="monospace">gemini -p</tspan> call, model gemini-3.5-flash-lite (fallback 3.1-flash-lite).</text>
+<text x="14" y="512" class="s">Env: PATH, HOME, GEMINI_API_KEY only (no GitHub token). Admin policy file: read / glob / grep / write / replace +</text>
+<text x="14" y="528" class="s"><tspan font-family="monospace">uv run pytest|ruff|mypy|python</tspan>; web, git push/commit, gh, curl denied. Edits outside the stage's folder</text>
+<text x="14" y="544" class="s">are reverted by code. 30 turns, 1200 s per call; long shell output summarised; 8M tokens per job.</text>
+</svg>

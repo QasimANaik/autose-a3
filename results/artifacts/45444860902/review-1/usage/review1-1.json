@@ -1,0 +1,28 @@
+{
+  "name": "review1-1",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_s": 50.9,
+  "tool_calls": 20,
+  "denied_tool_calls": 0,
+  "stats": {
+    "total_tokens": 420606,
+    "input_tokens": 412637,
+    "output_tokens": 1511,
+    "cached": 308386,
+    "input": 104251,
+    "duration_ms": 49081,
+    "tool_calls": 20,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 420606,
+        "input_tokens": 412637,
+        "output_tokens": 1511,
+        "cached": 308386,
+        "input": 104251
+      }
+    }
+  },
+  "error": ""
+}

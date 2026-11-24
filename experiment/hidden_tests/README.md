@@ -1,7 +1,7 @@
 # Hidden acceptance tests
 
 Kept **outside** the fork so no agent can see them. Run against any ref of the fork with
-`experiment/scripts/eval_hidden.sh <ref> <issue>`; output goes to `results/hidden/`.
+`experiment/scripts/eval_hidden.sh <ref> <issue>` (issues 1, 2, 3, 4, 18); output goes to `results/hidden/`.
 
 Baseline at `f7ec702` (main), verified 2026-11-23:
 
@@ -11,7 +11,7 @@ Baseline at `f7ec702` (main), verified 2026-11-23:
 | 2 | [#2](https://github.com/QasimANaik/mistune/issues/2) | bug: url plugin parens / trailing `?` `!` | 4 | 3 | 1 (`unbalanced_closing_paren_still_excluded`) |
 | 3 | [#3](https://github.com/QasimANaik/mistune/issues/3) | feature: `HTMLRenderer(link_rel=...)` | 4 | 3 | 1 (`default_output_unchanged`) |
 | 4 | [#4](https://github.com/QasimANaik/mistune/issues/4) | feature: `render_toc_ul(..., ordered=True)` | 4 | 3 | 1 (`default_unchanged`) |
-| 5 | [#5](https://github.com/QasimANaik/mistune/issues/5) | vague: "math breaks my page layout" (inline `$$..$$` → `<div>` inside `<p>`) | 4 | 1 | 3 (one-paragraph + 2 regression guards) |
+| 5 (replaced; tests in `replaced/issue-5`) | [#5](https://github.com/QasimANaik/mistune/issues/5) | vague: "math breaks my page layout" (inline `$$..$$` → `<div>` inside `<p>`) | 4 | 1 | 3 (one-paragraph + 2 regression guards) |
 | 18 | [#18](https://github.com/QasimANaik/mistune/issues/18) | **vague (replaces #5):** "some links in our chat logs are not clickable" (`www.` addresses not autolinked by the url plugin) | 4 | 2 | 2 (existing https links, code/non-addresses unchanged) |
 
 Interpretation chosen for the vague issue 5 is written in the test module docstring.

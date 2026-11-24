@@ -1,0 +1,29 @@
+{
+  "verdict": "request_changes",
+  "route": "code",
+  "summary": "The PR adds the requested `link_rel` option to HTMLRenderer, but unfortunately bypasses URL sanitization when `link_rel` is set, creating an XSS vulnerability with `javascript:` links.",
+  "checked": [
+    "uv run pytest -q --tb=short",
+    "uv run ruff check .",
+    "uv run mypy src",
+    "uv run python -c \"import mistune; md = mistune.create_markdown(renderer=mistune.HTMLRenderer(link_rel='nofollow'), plugins=['url']); print(md('[site](javascript:alert(1))'))\""
+  ],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "src/mistune/renderers/html.py",
+      "line": 129,
+      "problem": "When `link_rel` is specified, `href` is set directly to `url` without calling `self.sanitize_url(url)`, bypassing URL sanitization and allowing dangerous protocols like `javascript:`.",
+      "evidence": "Command: uv run python -c \"import mistune; md = mistune.create_markdown(renderer=mistune.HTMLRenderer(link_rel='nofollow'), plugins=['url']); print(md('[site](javascript:alert(1))'))\" -> Output: <p><a href=\"javascript:alert(1)\" rel=\"nofollow\">site</a></p>",
+      "suggestion": "Always sanitize the URL via `self.sanitize_url(url)` when building link attributes, regardless of `link_rel`: `attrs: Dict[str, object] = {\"href\": self.sanitize_url(url)}; if self._link_rel: attrs[\"rel\"] = self._link_rel`."
+    }
+  ],
+  "discarded_findings": [],
+  "round": "1",
+  "model": "gemini-3.5-flash-lite",
+  "variant": "baseline",
+  "pr": 21,
+  "head_sha": "784ea7423ff97d6cdb6e3d1d24b2f570ee3680db",
+  "issue": 3,
+  "tokens": 101710
+}

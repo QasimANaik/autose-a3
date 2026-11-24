@@ -1,0 +1,36 @@
+{
+  "verdict": "request_changes",
+  "route": "code",
+  "summary": "The PR correctly adds the `ordered` parameter to `render_toc_ul` but hardcodes `<ul>` for nested lists instead of respecting `ordered=True` at every nesting level, and the tests omit nested cases.",
+  "checked": [
+    "uv run pytest -q --tb=short",
+    "uv run ruff check . && uv run mypy src",
+    "uv run python -c 'from mistune.toc import render_toc_ul; print(render_toc_ul([(1, \"a\", \"A\"), (2, \"b\", \"B\")], ordered=True))'"
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "src/mistune/toc.py",
+      "line": 128,
+      "problem": "Nested lists are hardcoded to `<ul>` and `</ul>` regardless of the `ordered` parameter value, violating the requirement that `<ol>` should be used at every nesting level.",
+      "evidence": "Output of python test: <ol>\\n<li>...\\n<ul>\\n...\\n</ul>\\n</li>\\n</ol>",
+      "suggestion": "Define and use dynamic tag strings (`<{tag}>` and `</{tag}>`) for all inner list openings and closings in `render_toc_ul`."
+    },
+    {
+      "severity": "minor",
+      "file": "tests/test_toc_ordered.py",
+      "line": 4,
+      "problem": "New tests only assert behavior on flat lists and do not test nested lists.",
+      "evidence": "tests/test_toc_ordered.py only tests `[(1, \"a\", \"A\"), (1, \"b\", \"B\")]` and `[(1, \"a\", \"A\")]`.",
+      "suggestion": "Add test cases containing nested heading levels (e.g., level 1 and level 2 items) with `ordered=True` to verify all nesting levels render `<ol>`."
+    }
+  ],
+  "discarded_findings": [],
+  "round": "1",
+  "model": "gemini-3.5-flash-lite",
+  "variant": "baseline",
+  "pr": 20,
+  "head_sha": "8cb9b14a423ba2aac91b4edcf7807e3eba58488d",
+  "issue": 4,
+  "tokens": 105084
+}

@@ -1,4 +1,4 @@
-"""Generate architecture/views/architecture.drawio: the AutoSE workflow (LangGraph) with every node, what it does,
+"""Generate architecture/views/component-view.drawio: the AutoSE workflow (LangGraph) with every node, what it does,
 and an estimated cost per node / per run. Visual style follows the SpecBridge architecture.drawio.
 
 Prices: Gemini API Standard paid tier, USD per 1M tokens, read from https://aistudio.google.com/docs/pricing
@@ -11,7 +11,7 @@ Usage: python3 architecture/views/gen_architecture.py
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
-OUT = Path(__file__).resolve().parent / "architecture.drawio"
+OUT = Path(__file__).resolve().parents[1] / "component-view.drawio"
 
 # ---------------------------------------------------------------- cost model (estimates)
 PRICE = {  # USD per 1M tokens: input, cached input, output (incl. thinking)
