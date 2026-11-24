@@ -58,9 +58,9 @@ def fake_run_agent(name, text, model, policy, repo, out, cfg, skills=(), fallbac
             src = re.sub(r'(s \+= "</li>\\n</)ul(>\\n")', r'\1" + tag + "\2', src)
         p.write_text(src)
     elif "test worker" in text or "e2e / regression worker" in text:
-        f = re.search(r"ONE new file: `([^`]+)`", text).group(1)
+        f = re.search(r"ONE file: `([^`]+)`", text).group(1)
         ids = re.findall(r"- (AC-FR-\d{3}-\d+):", text.split("<acceptance_criteria>")[1])
-        body = "from mistune.toc import render_toc_ul\n\nITEMS = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n"
+        body = "import os\nfrom mistune.toc import render_toc_ul\nimport sys\n\nITEMS = [(1, 'a', 'A'), (2, 'b', 'B'), (1, 'c', 'C')]\n"
         if "e2e" in text and "test worker" not in text:
             body += "\n\ndef test_regression_default_ul():\n    \"\"\"regression\"\"\"\n    assert render_toc_ul(ITEMS).startswith('<ul>')\n"
         for i, a in enumerate(ids):
