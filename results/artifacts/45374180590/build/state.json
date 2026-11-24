@@ -1,0 +1,457 @@
+{
+  "issue": 5,
+  "variant": "baseline",
+  "mode": "build",
+  "round": "",
+  "issue_data": {
+    "body": "Since switching our blog to mistune with the `math` plugin, some posts look broken: the paragraph is split in two and the rest of the text jumps below the equation, and our HTML validator complains about the page.\n\nIt seems to happen in posts where authors write equations in the middle of a sentence, like\n\n    The famous relation $$E=mc^2$$ changed physics.\n\nPosts with equations on their own lines look fine. Not sure if this is a bug or if we are using it wrong, but could this be made to work nicely? We use MathJax on the frontend.\n",
+    "number": 5,
+    "title": "Math breaks my page layout",
+    "url": "https://github.com/QasimANaik/mistune/issues/5"
+  },
+  "injection_flags": [],
+  "base": "eae2468f669501c2a756b9b59c929df50b136b33",
+  "branch": "autose/issue-5",
+  "patch": "diff --git a/tests/test_autose_issue_5_e2e.py b/tests/test_autose_issue_5_e2e.py\nnew file mode 100644\nindex 0000000..3d0354d\n--- /dev/null\n+++ b/tests/test_autose_issue_5_e2e.py\n@@ -0,0 +1,85 @@\n+from html.parser import HTMLParser\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+from mistune.plugins.math import math_in_list\n+\n+\n+class HTMLStructureValidator(HTMLParser):\n+    def __init__(self):\n+        super().__init__()\n+        self.stack = []\n+        self.errors = []\n+\n+    def handle_starttag(self, tag, attrs):\n+        if self.stack and self.stack[-1] == 'p' and tag in ('div', 'p', 'table', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'):\n+            self.errors.append(f\"Invalid nesting: block tag <{tag}> inside <p>\")\n+        self.stack.append(tag)\n+\n+    def handle_endtag(self, tag):\n+        if self.stack and self.stack[-1] == tag:\n+            self.stack.pop()\n+        else:\n+            self.errors.append(f\"Mismatched end tag </{tag}>\")\n+\n+\n+class TestAutoseIssue5E2E(TestCase):\n+    def test_inline_double_dollar_math_and_nfr(self):\n+        # AC-FR-001-1 and AC-NFR-001-1\n+        md = create_markdown(plugins=[\"math\"])\n+        text = \"The famous relation $$E=mc^2$$ changed physics.\"\n+        result = md(text)\n+        expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n+        self.assertEqual(result, expected)\n+\n+        html_doc = f\"<!DOCTYPE html><html><body>{result}</body></html>\"\n+        validator = HTMLStructureValidator()\n+        validator.feed(html_doc)\n+        self.assertEqual(validator.errors, [], f\"HTML validation errors found: {validator.errors}\")\n+\n+    def test_block_math_and_single_dollar_math(self):\n+        # AC-FR-002-1 and AC-FR-003-1\n+        md = create_markdown(plugins=[\"math\"])\n+\n+        block_text = \"$$\\nE=mc^2\\n$$\"\n+        block_result = md(block_text)\n+        block_expected = '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'\n+        self.assertEqual(block_result, block_expected)\n+\n+        inline_text = \"The value is $f(x)$.\"\n+        inline_result = md(inline_text)\n+        inline_expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n+        self.assertEqual(inline_result, inline_expected)\n+\n+    def test_backtick_math_and_currency_rejection(self):\n+        # AC-FR-004-1 and AC-FR-005-1\n+        md = create_markdown(plugins=[\"math\"])\n+\n+        backtick_text = \"The value is $`f(x)`$.\"\n+        backtick_result = md(backtick_text)\n+        backtick_expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n+        self.assertEqual(backtick_result, backtick_expected)\n+\n+        currency_text = \"Price is $51,300.\"\n+        currency_result = md(currency_text)\n+        currency_expected = '<p>Price is $51,300.</p>\\n'\n+        self.assertEqual(currency_result, currency_expected)\n+\n+    def test_regression_combined_plugins_and_lists(self):\n+        # Regression test for nearby behavior (math in list / combined with strikethrough)\n+        md = create_markdown(plugins=[\"math\", math_in_list, \"strikethrough\"])\n+        text = \"- Formula: $$E=mc^2$$\\n- Price: $51,300\\n- ~~Strikethrough~~\"\n+        result = md(text)\n+        self.assertIn(r'<span class=\"math\">\\(E=mc^2\\)</span>', result)\n+        self.assertIn('Price: $51,300', result)\n+        self.assertIn('<del>Strikethrough</del>', result)\n+\n+    def test_regression_complex_document_mixed_math(self):\n+        # Regression test combining block math, inline double-dollar math, single-dollar math, and plain text\n+        md = create_markdown(plugins=[\"math\"])\n+        text = \"Start with $a+b$.\\n\\n$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$\\n\\nMiddle with $$x^2 + y^2 = z^2$$ and end.\"\n+        result = md(text)\n+        self.assertIn(r'<span class=\"math\">\\(a+b\\)</span>', result)\n+        self.assertIn('<div class=\"math\">$$', result)\n+        self.assertIn(r'<span class=\"math\">\\(x^2 + y^2 = z^2\\)</span>', result)\n+        self.assertNotIn('<p><div class=\"math\">', result)\ndiff --git a/tests/test_autose_issue_5_fr001.py b/tests/test_autose_issue_5_fr001.py\nnew file mode 100644\nindex 0000000..58b5f06\n--- /dev/null\n+++ b/tests/test_autose_issue_5_fr001.py\n@@ -0,0 +1,17 @@\n+from mistune import create_markdown\n+\n+\n+def test_math_inline_rendering():\n+    r\"\"\"AC-FR-001-1: Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.\"\"\"\n+    md = create_markdown(plugins=[\"math\"])\n+    text = \"The famous relation $$E=mc^2$$ changed physics.\"\n+    expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n+    assert md(text) == expected\n+\n+\n+def test_math_block_rendering():\n+    r\"\"\"AC-FR-002-1: Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'.\"\"\"\n+    md = create_markdown(plugins=[\"math\"])\n+    text = \"$$\\nE=mc^2\\n$$\"\n+    expected = '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'\n+    assert md(text) == expected\ndiff --git a/tests/test_autose_issue_5_fr003.py b/tests/test_autose_issue_5_fr003.py\nnew file mode 100644\nindex 0000000..6f1211d\n--- /dev/null\n+++ b/tests/test_autose_issue_5_fr003.py\n@@ -0,0 +1,19 @@\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+\n+\n+class TestAutoseIssue5Fr003(TestCase):\n+    def test_ac_fr_003_1(self):\n+        \"\"\"AC-FR-003-1: Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\\\"math\\\">\\\\(f(x)\\\\)</span>.</p>\\n'.\"\"\"\n+        md = create_markdown(plugins=[\"math\"])\n+        result = md(\"The value is $f(x)$.\")\n+        expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n+        self.assertEqual(result, expected)\n+\n+    def test_ac_fr_004_1(self):\n+        \"\"\"AC-FR-004-1: Given Markdown input 'The value is $`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\\\"math\\\">\\\\(f(x)\\\\)</span>.</p>\\n'.\"\"\"\n+        md = create_markdown(plugins=[\"math\"])\n+        result = md(\"The value is $`f(x)`$.\")\n+        expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n+        self.assertEqual(result, expected)\ndiff --git a/tests/test_autose_issue_5_fr005.py b/tests/test_autose_issue_5_fr005.py\nnew file mode 100644\nindex 0000000..81cda2d\n--- /dev/null\n+++ b/tests/test_autose_issue_5_fr005.py\n@@ -0,0 +1,19 @@\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+from mistune.renderers.markdown import MarkdownRenderer\n+\n+\n+class TestAutoseIssue5Fr005(TestCase):\n+    def test_ac_fr_005_1(self):\n+        \"\"\"AC-FR-005-1: Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'.\"\"\"\n+        md = create_markdown(plugins=[\"math\"])\n+        result = md(\"Price is $51,300.\")\n+        self.assertEqual(result, \"<p>Price is $51,300.</p>\\n\")\n+\n+    def test_ac_fr_005_1_markdown_renderer(self):\n+        \"\"\"AC-FR-005-1: Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n' (via MarkdownRenderer).\"\"\"\n+        md = create_markdown(renderer=MarkdownRenderer(), plugins=[\"math\"])\n+        result = md(\"Price is $51,300.\")\n+        # MarkdownRenderer produces markdown text output\n+        self.assertEqual(result, \"Price is $51,300.\\n\")\ndiff --git a/tests/test_autose_issue_5_nfr001.py b/tests/test_autose_issue_5_nfr001.py\nnew file mode 100644\nindex 0000000..6f50251\n--- /dev/null\n+++ b/tests/test_autose_issue_5_nfr001.py\n@@ -0,0 +1,56 @@\n+from html.parser import HTMLParser\n+from typing import List, Tuple\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+\n+\n+class HTMLValidator(HTMLParser):\n+    def __init__(self) -> None:\n+        super().__init__()\n+        self.errors: List[str] = []\n+        self.stack: List[str] = []\n+\n+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, str | None]]) -> None:\n+        block_tags = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'table', 'tr'}\n+        if self.stack and self.stack[-1] == 'p' and tag in block_tags:\n+            self.errors.append(f\"Validation error: block/invalid tag <{tag}> inside <p>\")\n+        self.stack.append(tag)\n+\n+    def handle_endtag(self, tag: str) -> None:\n+        if self.stack and self.stack[-1] == tag:\n+            self.stack.pop()\n+        else:\n+            self.errors.append(f\"Validation error: mismatched end tag </{tag}>\")\n+\n+\n+class TestNFR001MathValidation(TestCase):\n+    def test_inline_double_dollar_math_html_validation(self) -> None:\n+        \"\"\"AC-NFR-001-1: Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection\"\"\"\n+        md = create_markdown(plugins=[\"math\"])\n+\n+        markdown_texts = [\n+            \"Here is some text with $$x^2 + y^2 = z^2$$ inline math.\",\n+            \"$$a + b$$ is at the beginning of a paragraph.\",\n+            \"At the end of a paragraph: $$c + d$$\",\n+            \"Multiple expressions: $$1 + 1 = 2$$ and $$2 + 2 = 4$$ in one line.\",\n+        ]\n+\n+        for text in markdown_texts:\n+            html_output = md(text)\n+            full_doc = f\"<!DOCTYPE html><html><head><title>Math Test</title></head><body>{html_output}</body></html>\"\n+\n+            # Verify that inline math is rendered as span.math, not div.math\n+            self.assertIn('<span class=\"math\">', html_output)\n+            self.assertNotIn('<div class=\"math\">', html_output)\n+\n+            # HTML parser inspection for validation errors\n+            validator = HTMLValidator()\n+            validator.feed(full_doc)\n+            validator.close()\n+\n+            self.assertEqual(\n+                validator.errors,\n+                [],\n+                f\"HTML validation errors found for input {repr(text)}: {validator.errors} in HTML: {html_output}\",\n+            )",
+  "acs": {
+    "AC-FR-001-1": "Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.",
+    "AC-FR-002-1": "Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'.",
+    "AC-FR-003-1": "Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+    "AC-FR-004-1": "Given Markdown input 'The value is `$`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+    "AC-FR-005-1": "Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'.",
+    "AC-NFR-001-1": "Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection"
+  },
+  "stages": {
+    "spec": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "6 testable ACs"
+      ]
+    },
+    "design": {
+      "status": "passed",
+      "attempts": 2,
+      "notes": []
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 4,
+      "notes": []
+    },
+    "test": {
+      "status": "failed",
+      "attempts": 1,
+      "notes": [
+        "test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.56s",
+        "test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.57s",
+        "test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.53s",
+        "test suite failed: 5 failed, 1334 passed, 158 subtests passed in 5.43s",
+        "test suite failed: 5 failed, 1334 passed, 158 subtests passed in 5.43s (after 1 attempt(s))"
+      ]
+    },
+    "release": {
+      "status": "pending",
+      "attempts": 0,
+      "notes": []
+    }
+  },
+  "attempts": {
+    "spec": 1,
+    "design": 1,
+    "implement": 2,
+    "test": 1
+  },
+  "loops": {
+    "impl_after_test": 2,
+    "redesign": 1
+  },
+  "feedback": {
+    "implement": "Tests are failing. Make them pass by fixing the implementation (tests cannot be edited in this stage):\n```\n= \"Start with $a+b$.\\n\\n$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$\\n\\nMiddle with $$x^2 + y^2 = z^2$$ and end.\"\n        result = md(text)\n        self.assertIn(r'<span class=\"math\">\\(a+b\\)</span>', result)\n        self.assertIn('<div class=\"math\">$$', result)\n>       self.assertIn(r'<span class=\"math\">\\(x^2 + y^2 = z^2\\)</span>', result)\nE       AssertionError: '<span class=\"math\">\\\\(x^2 + y^2 = z^2\\\\)</span>' not found in '<p>Start with <span class=\"math\">\\\\(a+b\\\\)</span>.</p>\\n<div class=\"math\">$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$</div>\\n<p>Middle with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n and end.</p>\\n'\n\ntests/test_autose_issue_5_e2e.py:84: AssertionError\n__________________________ test_math_inline_rendering __________________________\n\n    def test_math_inline_rendering():\n        r\"\"\"AC-FR-001-1: Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n        text = \"The famous relation $$E=mc^2$$ changed physics.\"\n        expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n>       assert md(text) == expected\nE       assert '<p>The famou...hysics.</p>\\n' == '<p>The famou...hysics.</p>\\n'\nE         \nE         - <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\nE         + <p>The famous relation <div class=\"math\">$$\nE         + E=mc^2\nE         + $$</div>\nE         +  changed physics.</p>\n\ntests/test_autose_issue_5_fr001.py:9: AssertionError\n___ TestNFR001MathValidation.test_inline_double_dollar_math_html_validation ____\n\nself = <tests.test_autose_issue_5_nfr001.TestNFR001MathValidation testMethod=test_inline_double_dollar_math_html_validation>\n\n    def test_inline_double_dollar_math_html_validation(self) -> None:\n        \"\"\"AC-NFR-001-1: Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n    \n        markdown_texts = [\n            \"Here is some text with $$x^2 + y^2 = z^2$$ inline math.\",\n            \"$$a + b$$ is at the beginning of a paragraph.\",\n            \"At the end of a paragraph: $$c + d$$\",\n            \"Multiple expressions: $$1 + 1 = 2$$ and $$2 + 2 = 4$$ in one line.\",\n        ]\n    \n        for text in markdown_texts:\n            html_output = md(text)\n            full_doc = f\"<!DOCTYPE html><html><head><title>Math Test</title></head><body>{html_output}</body></html>\"\n    \n            # Verify that inline math is rendered as span.math, not div.math\n>           self.assertIn('<span class=\"math\">', html_output)\nE           AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n\ntests/test_autose_issue_5_nfr001.py:44: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_inline_double_dollar_math_and_nfr - AssertionError: '<p>T[15 chars]ion <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n c[17 chars]p>\\n' != '<p>T[15 chars]ion <span class=\"math\">\\\\(E=mc^2\\\\)</span> cha[15 chars]p>\\n'\n+ <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n- <p>The famous relation <div class=\"math\">$$\n- E=mc^2\n- $$</div>\n-  changed physics.</p>\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_combined_plugins_and_lists - AssertionError: '<span class=\"math\">\\\\(E=mc^2\\\\)</span>' not found in '<ul>\\n<li>Formula: <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n</li>\\n<li>Price: $51,300</li>\\n<li><del>Strikethrough</del></li>\\n</ul>\\n'\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_complex_document_mixed_math - AssertionError: '<span class=\"math\">\\\\(x^2 + y^2 = z^2\\\\)</span>' not found in '<p>Start with <span class=\"math\">\\\\(a+b\\\\)</span>.</p>\\n<div class=\"math\">$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$</div>\\n<p>Middle with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n and end.</p>\\n'\nFAILED tests/test_autose_issue_5_fr001.py::test_math_inline_rendering - assert '<p>The famou...hysics.</p>\\n' == '<p>The famou...hysics.</p>\\n'\n  \n  - <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n  + <p>The famous relation <div class=\"math\">$$\n  + E=mc^2\n  + $$</div>\n  +  changed physics.</p>\nFAILED tests/test_autose_issue_5_nfr001.py::TestNFR001MathValidation::test_inline_double_dollar_math_html_validation - AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n5 failed, 1334 passed, 158 subtests passed in 5.43s\n\n```",
+    "design": "The previous design led to an implementation whose tests keep failing:\n```\nNFR-001-1: Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n    \n        markdown_texts = [\n            \"Here is some text with $$x^2 + y^2 = z^2$$ inline math.\",\n            \"$$a + b$$ is at the beginning of a paragraph.\",\n            \"At the end of a paragraph: $$c + d$$\",\n            \"Multiple expressions: $$1 + 1 = 2$$ and $$2 + 2 = 4$$ in one line.\",\n        ]\n    \n        for text in markdown_texts:\n            html_output = md(text)\n            full_doc = f\"<!DOCTYPE html><html><head><title>Math Test</title></head><body>{html_output}</body></html>\"\n    \n            # Verify that inline math is rendered as span.math, not div.math\n>           self.assertIn('<span class=\"math\">', html_output)\nE           AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n\ntests/test_autose_issue_5_nfr001.py:44: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_inline_double_dollar_math_and_nfr - AssertionError: '<p>T[15 chars]ion <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n c[17 chars]p>\\n' != '<p>T[15 chars]ion <span class=\"math\">\\\\(E=mc^2\\\\)</span> cha[15 chars]p>\\n'\n+ <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n- <p>The famous relation <div class=\"math\">$$\n- E=mc^2\n- $$</div>\n-  changed physics.</p>\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_combined_plugins_and_lists - AssertionError: '<span class=\"math\">\\\\(E=mc^2\\\\)</span>' not found in '<ul>\\n<li>Formula: <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n</li>\\n<li>Price: $51,300</li>\\n<li><del>Strikethrough</del></li>\\n</ul>\\n'\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_complex_document_mixed_math - AssertionError: '<span class=\"math\">\\\\(x^2 + y^2 = z^2\\\\)</span>' not found in '<p>Start with <span class=\"math\">\\\\(a+b\\\\)</span>.</p>\\n<div class=\"math\">$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$</div>\\n<p>Middle with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n and end.</p>\\n'\nFAILED tests/test_autose_issue_5_fr001.py::test_math_inline_rendering - assert '<p>The famou...hysics.</p>\\n' == '<p>The famou...hysics.</p>\\n'\n  \n  - <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n  + <p>The famous relation <div class=\"math\">$$\n  + E=mc^2\n  + $$</div>\n  +  changed physics.</p>\nFAILED tests/test_autose_issue_5_nfr001.py::TestNFR001MathValidation::test_inline_double_dollar_math_html_validation - AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n5 failed, 1334 passed, 158 subtests passed in 5.43s\n\n```",
+    "tests": "RE-CHECK: these new tests fail against the implementation, and the implementer reviewed them and kept its code, i.e. it believes the implementation is right. Check each failing assertion against the issue and the library's existing output conventions; run the code (`uv run python -c ...`) to see the actual output. Fix the expectation if it is wrong. If the acceptance criterion itself is wrong or contradicts another criterion, follow the issue and add a line `AC-CONFLICT: <AC id>: <reason>` to your final message. Do not weaken a test just to make it pass.\n```\nhe famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n        text = \"The famous relation $$E=mc^2$$ changed physics.\"\n        expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n>       assert md(text) == expected\nE       assert '<p>The famou...hysics.</p>\\n' == '<p>The famou...hysics.</p>\\n'\nE         \nE         - <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\nE         + <p>The famous relation <div class=\"math\">$$\nE         + E=mc^2\nE         + $$</div>\nE         +  changed physics.</p>\n\ntests/test_autose_issue_5_fr001.py:9: AssertionError\n___ TestNFR001MathValidation.test_inline_double_dollar_math_html_validation ____\n\nself = <tests.test_autose_issue_5_nfr001.TestNFR001MathValidation testMethod=test_inline_double_dollar_math_html_validation>\n\n    def test_inline_double_dollar_math_html_validation(self) -> None:\n        \"\"\"AC-NFR-001-1: Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n    \n        markdown_texts = [\n            \"Here is some text with $$x^2 + y^2 = z^2$$ inline math.\",\n            \"$$a + b$$ is at the beginning of a paragraph.\",\n            \"At the end of a paragraph: $$c + d$$\",\n            \"Multiple expressions: $$1 + 1 = 2$$ and $$2 + 2 = 4$$ in one line.\",\n        ]\n    \n        for text in markdown_texts:\n            html_output = md(text)\n            full_doc = f\"<!DOCTYPE html><html><head><title>Math Test</title></head><body>{html_output}</body></html>\"\n    \n            # Verify that inline math is rendered as span.math, not div.math\n>           self.assertIn('<span class=\"math\">', html_output)\nE           AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n\ntests/test_autose_issue_5_nfr001.py:44: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_inline_double_dollar_math_and_nfr - AssertionError: '<p>T[15 chars]ion <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n c[17 chars]p>\\n' != '<p>T[15 chars]ion <span class=\"math\">\\\\(E=mc^2\\\\)</span> cha[15 chars]p>\\n'\n+ <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n- <p>The famous relation <div class=\"math\">$$\n- E=mc^2\n- $$</div>\n-  changed physics.</p>\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_combined_plugins_and_lists - AssertionError: '<span class=\"math\">\\\\(E=mc^2\\\\)</span>' not found in '<ul>\\n<li>Formula: <div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n</li>\\n<li>Price: $51,300</li>\\n<li><del>Strikethrough</del></li>\\n</ul>\\n'\nFAILED tests/test_autose_issue_5_e2e.py::TestAutoseIssue5E2E::test_regression_complex_document_mixed_math - AssertionError: '<span class=\"math\">\\\\(x^2 + y^2 = z^2\\\\)</span>' not found in '<p>Start with <span class=\"math\">\\\\(a+b\\\\)</span>.</p>\\n<div class=\"math\">$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$</div>\\n<p>Middle with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n and end.</p>\\n'\nFAILED tests/test_autose_issue_5_fr001.py::test_math_inline_rendering - assert '<p>The famou...hysics.</p>\\n' == '<p>The famou...hysics.</p>\\n'\n  \n  - <p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\n  + <p>The famous relation <div class=\"math\">$$\n  + E=mc^2\n  + $$</div>\n  +  changed physics.</p>\nFAILED tests/test_autose_issue_5_nfr001.py::TestNFR001MathValidation::test_inline_double_dollar_math_html_validation - AssertionError: '<span class=\"math\">' not found in '<p>Here is some text with <div class=\"math\">$$\\nx^2 + y^2 = z^2\\n$$</div>\\n inline math.</p>\\n'\n5 failed, 1334 passed, 158 subtests passed in 5.43s\n\n```"
+  },
+  "need_tests": false,
+  "allow_no_change": true,
+  "last_ok": false,
+  "weak": [],
+  "redo_items": [
+    {
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "test_file": "tests/test_autose_issue_5_fr001.py",
+      "acs": {
+        "AC-FR-001-1": "Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.",
+        "AC-FR-002-1": "Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'."
+      }
+    },
+    {
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1"
+      ],
+      "test_file": "tests/test_autose_issue_5_nfr001.py",
+      "acs": {
+        "AC-NFR-001-1": "Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection"
+      }
+    },
+    {
+      "kind": "e2e",
+      "criterion_ids": [],
+      "test_file": "tests/test_autose_issue_5_e2e.py",
+      "acs": {
+        "AC-FR-001-1": "Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.",
+        "AC-FR-002-1": "Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'.",
+        "AC-FR-003-1": "Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+        "AC-FR-004-1": "Given Markdown input 'The value is `$`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+        "AC-FR-005-1": "Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'.",
+        "AC-NFR-001-1": "Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection"
+      }
+    }
+  ],
+  "impl_changed": true,
+  "work_items": [
+    {
+      "id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "acs": {
+        "AC-FR-001-1": "Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.",
+        "AC-FR-002-1": "Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'."
+      },
+      "test_file": "tests/test_autose_issue_5_fr001.py",
+      "budget": {
+        "tokens": 1137921
+      }
+    },
+    {
+      "id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-004-1"
+      ],
+      "acs": {
+        "AC-FR-003-1": "Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+        "AC-FR-004-1": "Given Markdown input 'The value is `$`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'."
+      },
+      "test_file": "tests/test_autose_issue_5_fr003.py",
+      "budget": {
+        "tokens": 1137921
+      }
+    },
+    {
+      "id": "c3r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-005-1"
+      ],
+      "acs": {
+        "AC-FR-005-1": "Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'."
+      },
+      "test_file": "tests/test_autose_issue_5_fr005.py",
+      "budget": {
+        "tokens": 1137921
+      }
+    },
+    {
+      "id": "c4r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1"
+      ],
+      "acs": {
+        "AC-NFR-001-1": "Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection"
+      },
+      "test_file": "tests/test_autose_issue_5_nfr001.py",
+      "budget": {
+        "tokens": 1137921
+      }
+    },
+    {
+      "id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "acs": {
+        "AC-FR-001-1": "Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.",
+        "AC-FR-002-1": "Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'.",
+        "AC-FR-003-1": "Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+        "AC-FR-004-1": "Given Markdown input 'The value is `$`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>\\n'.",
+        "AC-FR-005-1": "Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'.",
+        "AC-NFR-001-1": "Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection"
+      },
+      "test_file": "tests/test_autose_issue_5_e2e.py",
+      "budget": {
+        "tokens": 1137921
+      }
+    }
+  ],
+  "results": [
+    {
+      "work_item_id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_5_fr001.py",
+      "content": "from mistune import create_markdown\n\n\ndef test_math_inline_rendering():\n    r\"\"\"AC-FR-001-1: Given Markdown input 'The famous relation $$E=mc^2$$ changed physics.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>\\n'.\"\"\"\n    md = create_markdown(plugins=[\"math\"])\n    text = \"The famous relation $$E=mc^2$$ changed physics.\"\n    expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n    assert md(text) == expected\n\n\ndef test_math_block_rendering():\n    r\"\"\"AC-FR-002-1: Given Markdown input '$$\\nE=mc^2\\n$$', when parsed with Markdown renderer using the math plugin, then exact observable output is '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'.\"\"\"\n    md = create_markdown(plugins=[\"math\"])\n    text = \"$$\\nE=mc^2\\n$$\"\n    expected = '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'\n    assert md(text) == expected\n",
+      "tests": [
+        "test_math_inline_rendering",
+        "test_math_block_rendering"
+      ],
+      "covered": {
+        "AC-FR-001-1": [
+          "test_math_inline_rendering"
+        ],
+        "AC-FR-002-1": [
+          "test_math_block_rendering"
+        ]
+      },
+      "pytest": "2 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 820783,
+      "notes": "ented**:\n   - `test_math_inline_rendering` (covers `AC-FR-001-1`)\n   - `test_math_block_rendering` (covers `AC-FR-002-1`)\n2. **Verification**:\n   - Ran `uv run pytest -q tests/test_autose_issue_5_fr001.py`: **2 passed**.\n   - Ran `uv run ruff check .` and `uv run mypy`: **All checks passed**.\n   - Note: Existing fixture test `TestPlugin1_math::test_inline_math_007` fails against the working tree implementation diff because the fixture expects block math output for certain inline syntax, whereas the new implementation parses it as inline math (as specified by the issue and acceptance criteria).",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-004-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_5_fr003.py",
+      "content": "from unittest import TestCase\n\nfrom mistune import create_markdown\n\n\nclass TestAutoseIssue5Fr003(TestCase):\n    def test_ac_fr_003_1(self):\n        \"\"\"AC-FR-003-1: Given Markdown input 'The value is $f(x)$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\\\"math\\\">\\\\(f(x)\\\\)</span>.</p>\\n'.\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n        result = md(\"The value is $f(x)$.\")\n        expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n        self.assertEqual(result, expected)\n\n    def test_ac_fr_004_1(self):\n        \"\"\"AC-FR-004-1: Given Markdown input 'The value is $`f(x)`$.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>The value is <span class=\\\"math\\\">\\\\(f(x)\\\\)</span>.</p>\\n'.\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n        result = md(\"The value is $`f(x)`$.\")\n        expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n        self.assertEqual(result, expected)\n",
+      "tests": [
+        "test_ac_fr_003_1",
+        "test_ac_fr_004_1"
+      ],
+      "covered": {
+        "AC-FR-003-1": [
+          "test_ac_fr_003_1",
+          "test_ac_fr_003_1"
+        ],
+        "AC-FR-004-1": [
+          "test_ac_fr_004_1",
+          "test_ac_fr_004_1"
+        ]
+      },
+      "pytest": "2 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 2176528,
+      "notes": "",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "c3r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-005-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_5_fr005.py",
+      "content": "from unittest import TestCase\n\nfrom mistune import create_markdown\nfrom mistune.renderers.markdown import MarkdownRenderer\n\n\nclass TestAutoseIssue5Fr005(TestCase):\n    def test_ac_fr_005_1(self):\n        \"\"\"AC-FR-005-1: Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n'.\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n        result = md(\"Price is $51,300.\")\n        self.assertEqual(result, \"<p>Price is $51,300.</p>\\n\")\n\n    def test_ac_fr_005_1_markdown_renderer(self):\n        \"\"\"AC-FR-005-1: Given Markdown input 'Price is $51,300.', when parsed with Markdown renderer using the math plugin, then exact observable output is '<p>Price is $51,300.</p>\\n' (via MarkdownRenderer).\"\"\"\n        md = create_markdown(renderer=MarkdownRenderer(), plugins=[\"math\"])\n        result = md(\"Price is $51,300.\")\n        # MarkdownRenderer produces markdown text output\n        self.assertEqual(result, \"Price is $51,300.\\n\")\n",
+      "tests": [
+        "test_ac_fr_005_1",
+        "test_ac_fr_005_1_markdown_renderer"
+      ],
+      "covered": {
+        "AC-FR-005-1": [
+          "test_ac_fr_005_1",
+          "test_ac_fr_005_1",
+          "test_ac_fr_005_1_markdown_renderer",
+          "test_ac_fr_005_1_markdown_renderer"
+        ]
+      },
+      "pytest": "2 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 381954,
+      "notes": "I have implemented the tests covering AC-FR-005-1 in `tests/test_autose_issue_5_fr005.py`.\n\n### Summary\n- **Test File:** `tests/test_autose_issue_5_fr005.py`\n- **Covered AC:**\n  - `AC-FR-005-1`: Validated that parsing Markdown input `'Price is $51,300.'` with the math plugin produces the exact expected output (`'<p>Price is $51,300.</p>\\n'`), and tested round-trip via `MarkdownRenderer`.\n- **Validation:** Ran `uv run pytest -q tests/test_autose_issue_5_fr005.py` successfully, along with `ruff` and `mypy` checks.",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "c4r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_5_nfr001.py",
+      "content": "from html.parser import HTMLParser\nfrom typing import List, Tuple\nfrom unittest import TestCase\n\nfrom mistune import create_markdown\n\n\nclass HTMLValidator(HTMLParser):\n    def __init__(self) -> None:\n        super().__init__()\n        self.errors: List[str] = []\n        self.stack: List[str] = []\n\n    def handle_starttag(self, tag: str, attrs: List[Tuple[str, str | None]]) -> None:\n        block_tags = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'table', 'tr'}\n        if self.stack and self.stack[-1] == 'p' and tag in block_tags:\n            self.errors.append(f\"Validation error: block/invalid tag <{tag}> inside <p>\")\n        self.stack.append(tag)\n\n    def handle_endtag(self, tag: str) -> None:\n        if self.stack and self.stack[-1] == tag:\n            self.stack.pop()\n        else:\n            self.errors.append(f\"Validation error: mismatched end tag </{tag}>\")\n\n\nclass TestNFR001MathValidation(TestCase):\n    def test_inline_double_dollar_math_html_validation(self) -> None:\n        \"\"\"AC-NFR-001-1: Metric: HTML validation errors | Threshold: 0 validation errors on pages with inline double-dollar math | Conditions: Parsed output rendered in HTML document | Method: HTML parser inspection\"\"\"\n        md = create_markdown(plugins=[\"math\"])\n\n        markdown_texts = [\n            \"Here is some text with $$x^2 + y^2 = z^2$$ inline math.\",\n            \"$$a + b$$ is at the beginning of a paragraph.\",\n            \"At the end of a paragraph: $$c + d$$\",\n            \"Multiple expressions: $$1 + 1 = 2$$ and $$2 + 2 = 4$$ in one line.\",\n        ]\n\n        for text in markdown_texts:\n            html_output = md(text)\n            full_doc = f\"<!DOCTYPE html><html><head><title>Math Test</title></head><body>{html_output}</body></html>\"\n\n            # Verify that inline math is rendered as span.math, not div.math\n            self.assertIn('<span class=\"math\">', html_output)\n            self.assertNotIn('<div class=\"math\">', html_output)\n\n            # HTML parser inspection for validation errors\n            validator = HTMLValidator()\n            validator.feed(full_doc)\n            validator.close()\n\n            self.assertEqual(\n                validator.errors,\n                [],\n                f\"HTML validation errors found for input {repr(text)}: {validator.errors} in HTML: {html_output}\",\n            )\n",
+      "tests": [
+        "test_inline_double_dollar_math_html_validation"
+      ],
+      "covered": {
+        "AC-NFR-001-1": [
+          "test_inline_double_dollar_math_html_validation"
+        ]
+      },
+      "pytest": "1 passed in 0.03s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 743084,
+      "notes": "TMLValidator`) to inspect parsed HTML documents containing inline double-dollar math.\n   - Verified that inline double-dollar math renders as `<span class=\"math\">` (valid inline element) rather than `<div class=\"math\">` (block element).\n   - Ensured zero HTML validation errors (e.g., no block elements nested inside paragraphs `<p>`).\n3. **Verification:**\n   - Ran `uv run pytest -q tests/test_autose_issue_5_nfr001.py` (passed successfully).\n   - Ran `uv run mypy tests/test_autose_issue_5_nfr001.py` and `uv run ruff check tests/test_autose_issue_5_nfr001.py` (all checks passed with zero errors).",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_5_e2e.py",
+      "content": "from html.parser import HTMLParser\nfrom unittest import TestCase\n\nfrom mistune import create_markdown\nfrom mistune.plugins.math import math_in_list\n\n\nclass HTMLStructureValidator(HTMLParser):\n    def __init__(self):\n        super().__init__()\n        self.stack = []\n        self.errors = []\n\n    def handle_starttag(self, tag, attrs):\n        if self.stack and self.stack[-1] == 'p' and tag in ('div', 'p', 'table', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'):\n            self.errors.append(f\"Invalid nesting: block tag <{tag}> inside <p>\")\n        self.stack.append(tag)\n\n    def handle_endtag(self, tag):\n        if self.stack and self.stack[-1] == tag:\n            self.stack.pop()\n        else:\n            self.errors.append(f\"Mismatched end tag </{tag}>\")\n\n\nclass TestAutoseIssue5E2E(TestCase):\n    def test_inline_double_dollar_math_and_nfr(self):\n        # AC-FR-001-1 and AC-NFR-001-1\n        md = create_markdown(plugins=[\"math\"])\n        text = \"The famous relation $$E=mc^2$$ changed physics.\"\n        result = md(text)\n        expected = r'<p>The famous relation <span class=\"math\">\\(E=mc^2\\)</span> changed physics.</p>'+'\\n'\n        self.assertEqual(result, expected)\n\n        html_doc = f\"<!DOCTYPE html><html><body>{result}</body></html>\"\n        validator = HTMLStructureValidator()\n        validator.feed(html_doc)\n        self.assertEqual(validator.errors, [], f\"HTML validation errors found: {validator.errors}\")\n\n    def test_block_math_and_single_dollar_math(self):\n        # AC-FR-002-1 and AC-FR-003-1\n        md = create_markdown(plugins=[\"math\"])\n\n        block_text = \"$$\\nE=mc^2\\n$$\"\n        block_result = md(block_text)\n        block_expected = '<div class=\"math\">$$\\nE=mc^2\\n$$</div>\\n'\n        self.assertEqual(block_result, block_expected)\n\n        inline_text = \"The value is $f(x)$.\"\n        inline_result = md(inline_text)\n        inline_expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n        self.assertEqual(inline_result, inline_expected)\n\n    def test_backtick_math_and_currency_rejection(self):\n        # AC-FR-004-1 and AC-FR-005-1\n        md = create_markdown(plugins=[\"math\"])\n\n        backtick_text = \"The value is $`f(x)`$.\"\n        backtick_result = md(backtick_text)\n        backtick_expected = r'<p>The value is <span class=\"math\">\\(f(x)\\)</span>.</p>'+'\\n'\n        self.assertEqual(backtick_result, backtick_expected)\n\n        currency_text = \"Price is $51,300.\"\n        currency_result = md(currency_text)\n        currency_expected = '<p>Price is $51,300.</p>\\n'\n        self.assertEqual(currency_result, currency_expected)\n\n    def test_regression_combined_plugins_and_lists(self):\n        # Regression test for nearby behavior (math in list / combined with strikethrough)\n        md = create_markdown(plugins=[\"math\", math_in_list, \"strikethrough\"])\n        text = \"- Formula: $$E=mc^2$$\\n- Price: $51,300\\n- ~~Strikethrough~~\"\n        result = md(text)\n        self.assertIn(r'<span class=\"math\">\\(E=mc^2\\)</span>', result)\n        self.assertIn('Price: $51,300', result)\n        self.assertIn('<del>Strikethrough</del>', result)\n\n    def test_regression_complex_document_mixed_math(self):\n        # Regression test combining block math, inline double-dollar math, single-dollar math, and plain text\n        md = create_markdown(plugins=[\"math\"])\n        text = \"Start with $a+b$.\\n\\n$$\\n\\\\sum_{i=1}^n i = \\\\frac{n(n+1)}{2}\\n$$\\n\\nMiddle with $$x^2 + y^2 = z^2$$ and end.\"\n        result = md(text)\n        self.assertIn(r'<span class=\"math\">\\(a+b\\)</span>', result)\n        self.assertIn('<div class=\"math\">$$', result)\n        self.assertIn(r'<span class=\"math\">\\(x^2 + y^2 = z^2\\)</span>', result)\n        self.assertNotIn('<p><div class=\"math\">', result)\n",
+      "tests": [
+        "test_inline_double_dollar_math_and_nfr",
+        "test_block_math_and_single_dollar_math",
+        "test_backtick_math_and_currency_rejection",
+        "test_regression_combined_plugins_and_lists",
+        "test_regression_complex_document_mixed_math"
+      ],
+      "covered": {},
+      "pytest": "5 passed in 0.03s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 608975,
+      "notes": "comprehensive test cases in `tests/test_autose_issue_5_e2e.py` covering inline double-dollar math (AC-FR-001-1), block math (AC-FR-002-1), single-dollar math (AC-FR-003-1), backtick math (AC-FR-004-1), currency handling/rejection (AC-FR-005-1), HTML validation / structure inspection (AC-NFR-001-1), and regression testing for combined plugins (strikethrough, lists) and mixed math documents.\n- **Validation:** Executed `uv run pytest -q tests/test_autose_issue_5_e2e.py`, `uv run ruff check .`, and `uv run mypy`, confirming 100% test success, zero linting issues, and strict type safety compliance.",
+      "ac_conflicts": []
+    }
+  ],
+  "status": "failed",
+  "stopped_at": "test",
+  "stop_reason": "test suite failed: 5 failed, 1334 passed, 158 subtests passed in 5.43s (after 1 attempt(s))",
+  "tokens": 8438585,
+  "events": [
+    {
+      "t": "2026-11-24T10:23:02Z",
+      "stage": "intake",
+      "msg": "build run https://github.com/QasimANaik/mistune/actions/runs/45374180590"
+    },
+    {
+      "t": "2026-11-24T10:23:51Z",
+      "stage": "spec",
+      "msg": "passed: 6 acceptance criteria"
+    },
+    {
+      "t": "2026-11-24T10:24:24Z",
+      "stage": "design",
+      "msg": "passed"
+    },
+    {
+      "t": "2026-11-24T10:24:45Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T10:24:45Z",
+      "stage": "test",
+      "msg": "orchestrator: 5 worker(s) in parallel: c1r1=['AC-FR-001-1', 'AC-FR-002-1'], c2r1=['AC-FR-003-1', 'AC-FR-004-1'], c3r1=['AC-FR-005-1'], c4r1=['AC-NFR-001-1'], e2er1=e2e"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c1r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c2r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c3r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c4r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker e2er1: complete"
+    },
+    {
+      "t": "2026-11-24T10:26:54Z",
+      "stage": "test",
+      "msg": "merge: failed ['test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.56s']"
+    },
+    {
+      "t": "",
+      "stage": "control",
+      "msg": "loop-back impl_after_test #1 -> implement"
+    },
+    {
+      "t": "2026-11-24T10:27:48Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T10:27:54Z",
+      "stage": "test",
+      "msg": "merge: failed ['test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.57s']"
+    },
+    {
+      "t": "",
+      "stage": "control",
+      "msg": "loop-back impl_after_test #2 -> implement"
+    },
+    {
+      "t": "2026-11-24T10:28:56Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T10:29:02Z",
+      "stage": "test",
+      "msg": "merge: failed ['test suite failed: 2 failed, 1337 passed, 158 subtests passed in 5.53s']"
+    },
+    {
+      "t": "",
+      "stage": "control",
+      "msg": "loop-back redesign #1 -> design"
+    },
+    {
+      "t": "2026-11-24T10:29:39Z",
+      "stage": "design",
+      "msg": "passed"
+    },
+    {
+      "t": "2026-11-24T10:31:52Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T10:31:58Z",
+      "stage": "test",
+      "msg": "merge: failed ['test suite failed: 5 failed, 1334 passed, 158 subtests passed in 5.43s']"
+    },
+    {
+      "t": "2026-11-24T10:31:58Z",
+      "stage": "stop",
+      "msg": "STOP at test: test suite failed: 5 failed, 1334 passed, 158 subtests passed in 5.43s (after 1 attempt(s))"
+    }
+  ]
+}

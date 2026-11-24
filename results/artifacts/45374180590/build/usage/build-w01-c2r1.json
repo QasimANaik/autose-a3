@@ -1,0 +1,35 @@
+{
+  "name": "build-w01-c2r1",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 53,
+  "timed_out": false,
+  "duration_s": 122.4,
+  "tool_calls": 60,
+  "denied_tool_calls": 0,
+  "stats": {
+    "total_tokens": 2176528,
+    "input_tokens": 2154999,
+    "output_tokens": 5051,
+    "cached": 1945456,
+    "input": 209543,
+    "duration_ms": 0,
+    "tool_calls": 60,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 2158625,
+        "input_tokens": 2138767,
+        "output_tokens": 4685,
+        "cached": 1945456,
+        "input": 193311
+      },
+      "gemini-3-flash-preview": {
+        "total_tokens": 17903,
+        "input_tokens": 16232,
+        "output_tokens": 366,
+        "cached": 0,
+        "input": 16232
+      }
+    }
+  },
+  "error": "Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json."
+}

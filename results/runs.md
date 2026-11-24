@@ -17,12 +17,18 @@ Token counts come from each agent call's `usage/*.json` (Gemini CLI stream-json 
 | 8 | [45354704591](https://github.com/QasimANaik/mistune/actions/runs/45354704591) | #4 | gemini-3.5-flash-lite | **PR opened, approved** | – | 8 | 2.00M (79%) / 15k | $0.21 | all stages first time; [PR #11](https://github.com/QasimANaik/mistune/pull/11), [CI](https://github.com/QasimANaik/mistune/actions/runs/45355186100) green; reviewer approved; hidden tests 4/4 |
 | 9 | [45379575388](https://github.com/QasimANaik/mistune/actions/runs/45379575388) | #1 | gemini-3.5-flash-lite | failed | test | 10 | 5.51M (82%) / 50k | $0.55 | correct code (agent diff passes 4/4 hidden tests) but issue #1 changes behaviour pinned by 8 EXISTING upstream fixture tests (`tests/fixtures/table.txt`, "Invalid Table"); the implementer may not edit tests → loops until stop → **PR #14**: declared existing-test updates |
 
-**Totals so far:** 46 agent calls, 16.09M input tokens (12.91M cached) and 121k output tokens, about **$1.88**.
+| 10 | [45374180590](https://github.com/QasimANaik/mistune/actions/runs/45374180590) | #5 | gemini-3.5-flash-lite | failed | test | 12 | 8.28M (86%) / 30k | $0.64 | math change kept breaking 2–5 tests through 2 implement loops + redesign; #5 later closed and replaced by #18 |
+| 11 | [45377035235](https://github.com/QasimANaik/mistune/actions/runs/45377035235) | #3 | gemini-3.5-flash-lite | **PR opened, approved** | – | 7 | 2.94M (66%) / 14k | $0.39 | all stages first time; [PR #13](https://github.com/QasimANaik/mistune/pull/13); hidden tests 4/4 |
+| 12 | [45393000300](https://github.com/QasimANaik/mistune/actions/runs/45393000300) | #2 | gemini-3.5-flash-lite | **PR opened, approved** | – | 8 | 3.60M (83%) / 18k | $0.31 | design check tripped once on a backticked `None`; undeclared fixture edit reverted; [PR #16](https://github.com/QasimANaik/mistune/pull/16); hidden 4/4 |
+| 13 | [45394861968](https://github.com/QasimANaik/mistune/actions/runs/45394861968) | #5 | gemini-3.5-flash-lite | cancelled | build | 5 | 2.76M (85%) / 16k | $0.23 | cancelled by hand while replacing #5 |
+| 14 | [45394898264](https://github.com/QasimANaik/mistune/actions/runs/45394898264) | #1 | gemini-3.5-flash-lite | **PR opened, approved** | – | 7 | 2.92M (83%) / 22k | $0.28 | after PR #14: design declared `tests/fixtures/table.txt`; [PR #17](https://github.com/QasimANaik/mistune/pull/17); hidden 4/4 |
+| 15 | [45398325310](https://github.com/QasimANaik/mistune/actions/runs/45398325310) | #5 | – | skipped | – | 0 | – | $0 | comment on the closed issue; gate did nothing |
+| 16 | [45398556370](https://github.com/QasimANaik/mistune/actions/runs/45398556370) | #18 | gemini-3.5-flash-lite | failed | release | 7 | 3.38M (82%) / 20k | $0.31 | CI failed only on PyPy: a generated test runs mypy/benchmark in a subprocess (+1 flaky upstream timing test); [PR #19](https://github.com/QasimANaik/mistune/pull/19) left open; hidden 4/4 |
+**Totals (16 runs):** 92 agent calls, 39.97M input tokens (32.53M cached, 81%) and 240k output tokens, about **$4.04**. Hidden acceptance tests: **20/20 pass** on the five bot PR branches (#1, #2, #3, #4, #18).
 
 Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistune/pull/7), [#8](https://github.com/QasimANaik/mistune/pull/8), [#9](https://github.com/QasimANaik/mistune/pull/9), [#10](https://github.com/QasimANaik/mistune/pull/10), [#12](https://github.com/QasimANaik/mistune/pull/12) (token savings, before run 9); [#14](https://github.com/QasimANaik/mistune/pull/14) (declared existing-test updates, after run 9).
 Artifacts of runs 7 and 8 are copied to `results/artifacts/` (GitHub keeps them 90 days).
 
 ## Still to run
-- Issue #1 again after PRs #14/#15; issue #2; **issue #18** (vague, replaces #5 which was closed as not planned).
 - 5 seeded PRs for the reviewer (`/autose review`), baseline and `weak_reviewer` (experiment E1).
 - Experiment E2: design stage with vs without ARCHITECTURE.md (`variant=no_arch`, `stop_after=design`).

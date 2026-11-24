@@ -8,8 +8,8 @@ ________________________ test_www_address_becomes_link _________________________
 E       AssertionError: <p>docs are at www.example.com/docs now</p>
 E         
 E       assert None
-E        +  where None = <function search at 0x743f234872e0>('<a href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a> now', '<p>docs are at www.example.com/docs now</p>\n')
-E        +    where <function search at 0x743f234872e0> = re.search
+E        +  where None = <function search at 0x738da16832e0>('<a href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a> now', '<p>docs are at www.example.com/docs now</p>\n')
+E        +    where <function search at 0x738da16832e0> = re.search
 
 tests/test_hidden_issue18.py:16: AssertionError
 ____________________ test_www_trailing_punctuation_excluded ____________________
@@ -20,8 +20,8 @@ ____________________ test_www_trailing_punctuation_excluded ____________________
 E       AssertionError: <p>see www.example.com/docs, or later.</p>
 E         
 E       assert None
-E        +  where None = <function search at 0x743f234872e0>('href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a>,', '<p>see www.example.com/docs, or later.</p>\n')
-E        +    where <function search at 0x743f234872e0> = re.search
+E        +  where None = <function search at 0x738da16832e0>('href="https?://www\\.example\\.com/docs">www\\.example\\.com/docs</a>,', '<p>see www.example.com/docs, or later.</p>\n')
+E        +    where <function search at 0x738da16832e0> = re.search
 
 tests/test_hidden_issue18.py:21: AssertionError
 =========================== short test summary info ============================

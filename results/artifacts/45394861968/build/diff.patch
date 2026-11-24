@@ -1,0 +1,35 @@
+diff --git a/src/mistune/plugins/math.py b/src/mistune/plugins/math.py
+index 3d35fb3..3d46969 100644
+--- a/src/mistune/plugins/math.py
++++ b/src/mistune/plugins/math.py
+@@ -32,7 +32,7 @@ def parse_block_math(block: "BlockParser", m: Match[str], state: "BlockState") -
+ def parse_inline_math(inline: "InlineParser", m: Match[str], state: "InlineState") -> int:
+     display_text = m.group("display_math_text")
+     if display_text is not None:
+-        state.append_token({"type": "block_math", "raw": display_text})
++        state.append_token({"type": "inline_math", "raw": display_text})
+         return m.end()
+ 
+     text = m.group("backtick_math_text")
+diff --git a/tests/fixtures/math.txt b/tests/fixtures/math.txt
+index 1bac910..10f6118 100644
+--- a/tests/fixtures/math.txt
++++ b/tests/fixtures/math.txt
+@@ -93,10 +93,13 @@ $$</div>
+ ```````````````````````````````` example
+ No newline $$x$$
+ .
+-<p>No newline <div class="math">$$
+-x
+-$$</div>
+-</p>
++<p>No newline <span class="math">\(x\)</span></p>
++````````````````````````````````
++
++```````````````````````````````` example
++The famous relation $$E=mc^2$$ changed physics.
++.
++<p>The famous relation <span class="math">\(E=mc^2\)</span> changed physics.</p>
+ ````````````````````````````````
+ 
+ ```````````````````````````````` example

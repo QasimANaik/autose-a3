@@ -1,0 +1,300 @@
+{
+  "issue": 1,
+  "variant": "baseline",
+  "mode": "build",
+  "round": "",
+  "issue_data": {
+    "body": "Hi, I'm using mistune 3 with the `table` plugin to render README-style docs in our internal wiki.\n\nWhen one of the rows in a table has fewer cells than the header (someone forgot a trailing `|` value), or has one cell too many, the **whole table** is not rendered. Instead the raw pipes are dumped into a paragraph:\n\n```python\nimport mistune\nmd = mistune.create_markdown(plugins=[\"table\"])\nprint(md(\"| Name | Role |\\n|------|------|\\n| Ana |\"))\n```\n\nOutput:\n\n```html\n<p>| Name | Role |\n|------|------|\n| Ana |</p>\n```\n\nSame thing with `| Ana | Dev | extra |` as the row.\n\nGitHub renders both of these as a normal table (the short row just gets an empty cell, the extra cell is dropped), and so do the other Markdown tools we used before. Our docs are edited by many people, so one sloppy row breaking a 40-row table is pretty painful.\n\nPython 3.12, mistune from main. Thanks!\n",
+    "number": 1,
+    "title": "Table disappears completely if one row has a missing or extra cell",
+    "url": "https://github.com/QasimANaik/mistune/issues/1"
+  },
+  "injection_flags": [],
+  "base": "ed4b269fde1052614914caceb0245d4b64286a65",
+  "branch": "autose/issue-1",
+  "patch": "diff --git a/src/mistune/plugins/table.py b/src/mistune/plugins/table.py\nindex 14ae19f..8e064eb 100644\n--- a/src/mistune/plugins/table.py\n+++ b/src/mistune/plugins/table.py\n@@ -121,8 +121,10 @@ def _process_thead(header: str, align: str) -> Union[Tuple[None, None], Tuple[Di\n \n def _process_row(text: str, aligns: List[Optional[str]]) -> Optional[Dict[str, Any]]:\n     cells = _split_table_cells(text)\n-    if len(cells) != len(aligns):\n-        return None\n+    if len(cells) < len(aligns):\n+        cells += [\"\"] * (len(aligns) - len(cells))\n+    elif len(cells) > len(aligns):\n+        cells = cells[:len(aligns)]\n \n     children: List[Dict[str, Any]] = [\n         {\"type\": \"table_cell\", \"text\": text.strip(), \"attrs\": {\"align\": aligns[i], \"head\": False}}\ndiff --git a/tests/fixtures/table.txt b/tests/fixtures/table.txt\nindex 4e14717..8808737 100644\n--- a/tests/fixtures/table.txt\n+++ b/tests/fixtures/table.txt\n@@ -48,10 +48,21 @@ Content Cell  | Content Cell\n | a | b | c |\n paragraph\n .\n-<p>| A | B |\n-| - | - |\n-| a | b | c |\n-paragraph</p>\n+<table>\n+<thead>\n+<tr>\n+  <th>A</th>\n+  <th>B</th>\n+</tr>\n+</thead>\n+<tbody>\n+<tr>\n+  <td>a</td>\n+  <td>b</td>\n+</tr>\n+</tbody>\n+</table>\n+<p>paragraph</p>\n ````````````````````````````````\n \n ```````````````````````````````` example\n@@ -68,12 +79,21 @@ A | B\n a | b | c\n paragraph\n .\n-<p>A | B</p>\n-<ul>\n-<li>| -\n-a | b | c\n-paragraph</li>\n-</ul>\n+<table>\n+<thead>\n+<tr>\n+  <th>A</th>\n+  <th>B</th>\n+</tr>\n+</thead>\n+<tbody>\n+<tr>\n+  <td>a</td>\n+  <td>b</td>\n+</tr>\n+</tbody>\n+</table>\n+<p>paragraph</p>\n ````````````````````````````````\n \n ## Not a delimiter row\n@@ -365,10 +385,24 @@ a | b\n | Content Cell  |\n | Content Cell  | Content Cell  |\n .\n-<p>| First Header  | Second Header |\n-| ------------- | ------------- |\n-| Content Cell  |\n-| Content Cell  | Content Cell  |</p>\n+<table>\n+<thead>\n+<tr>\n+  <th>First Header</th>\n+  <th>Second Header</th>\n+</tr>\n+</thead>\n+<tbody>\n+<tr>\n+  <td>Content Cell</td>\n+  <td></td>\n+</tr>\n+<tr>\n+  <td>Content Cell</td>\n+  <td>Content Cell</td>\n+</tr>\n+</tbody>\n+</table>\n ````````````````````````````````\n \n ```````````````````````````````` example\n@@ -388,9 +422,20 @@ A | B | C\n - | - | -\n a | b\n .\n-<p>A | B | C</p>\n-<ul>\n-<li>| - | -\n-a | b</li>\n-</ul>\n+<table>\n+<thead>\n+<tr>\n+  <th>A</th>\n+  <th>B</th>\n+  <th>C</th>\n+</tr>\n+</thead>\n+<tbody>\n+<tr>\n+  <td>a</td>\n+  <td>b</td>\n+  <td></td>\n+</tr>\n+</tbody>\n+</table>\n ````````````````````````````````\ndiff --git a/tests/test_autose_issue_1_e2e.py b/tests/test_autose_issue_1_e2e.py\nnew file mode 100644\nindex 0000000..a64632d\n--- /dev/null\n+++ b/tests/test_autose_issue_1_e2e.py\n@@ -0,0 +1,142 @@\n+from unittest import TestCase\n+\n+import mistune\n+\n+\n+class TestAutoseIssue1E2E(TestCase):\n+    def test_e2e_table_ac_missing_and_extra_cells(self):\n+        # AC-FR-001-1: Given Markdown text with fewer cells than header, padded with empty cell\n+        text_missing = \"| Name | Role |\\n|---|---|\\n| Ana |\"\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected_missing = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th>Name</th>\\n\"\n+            \"  <th>Role</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td>Ana</td>\\n\"\n+            \"  <td></td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text_missing), expected_missing)\n+\n+        # AC-FR-002-1: Given Markdown text with more cells than header, truncated to header length\n+        text_extra = \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\"\n+        expected_extra = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th>Name</th>\\n\"\n+            \"  <th>Role</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td>Ana</td>\\n\"\n+            \"  <td>Dev</td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text_extra), expected_extra)\n+\n+        # AC-FR-003-1: Given Markdown text with exact matching cells\n+        text_match = \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\"\n+        self.assertEqual(md(text_match), expected_extra)\n+\n+    def test_e2e_table_ac_invalid_delimiter(self):\n+        # AC-FR-004-1: Given Markdown text with invalid delimiter count, falls back to paragraph\n+        text = \"| Name | Role |\\n|---|\"\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected = \"<p>| Name | Role |\\n|---|</p>\\n\"\n+        self.assertEqual(md(text), expected)\n+\n+    def test_e2e_table_combined_plugins_and_options(self):\n+        # Combining table plugin, speedup plugin, and escape=False with cell formatting\n+        text = \"| Item | Price |\\n| :--- | ---: |\\n| **Apple** | $1.50 |\"\n+        md = mistune.create_markdown(escape=False, plugins=[\"table\", \"speedup\"])\n+        expected = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th style=\\\"text-align:left\\\">Item</th>\\n\"\n+            \"  <th style=\\\"text-align:right\\\">Price</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td style=\\\"text-align:left\\\"><strong>Apple</strong></td>\\n\"\n+            \"  <td style=\\\"text-align:right\\\">$1.50</td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text), expected)\n+\n+    def test_e2e_regression_standard_table_with_formatting(self):\n+        # Regression test 1: Standard table with explicit alignments and inline formatting\n+        text = (\n+            \"| Left | Center | Right |\\n\"\n+            \"| :--- | :---: | ---: |\\n\"\n+            \"| *a* | b | c |\\n\"\n+            \"| d | e | f |\\n\"\n+        )\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th style=\\\"text-align:left\\\">Left</th>\\n\"\n+            \"  <th style=\\\"text-align:center\\\">Center</th>\\n\"\n+            \"  <th style=\\\"text-align:right\\\">Right</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td style=\\\"text-align:left\\\"><em>a</em></td>\\n\"\n+            \"  <td style=\\\"text-align:center\\\">b</td>\\n\"\n+            \"  <td style=\\\"text-align:right\\\">c</td>\\n\"\n+            \"</tr>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td style=\\\"text-align:left\\\">d</td>\\n\"\n+            \"  <td style=\\\"text-align:center\\\">e</td>\\n\"\n+            \"  <td style=\\\"text-align:right\\\">f</td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text), expected)\n+\n+    def test_e2e_regression_table_missing_cells_multiline(self):\n+        # Regression test 2: Table with 3 columns where data row has fewer cells\n+        text = (\n+            \"A | B | C\\n\"\n+            \"- | - | -\\n\"\n+            \"a | b\\n\"\n+        )\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th>A</th>\\n\"\n+            \"  <th>B</th>\\n\"\n+            \"  <th>C</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td>a</td>\\n\"\n+            \"  <td>b</td>\\n\"\n+            \"  <td></td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text), expected)\ndiff --git a/tests/test_autose_issue_1_fr001.py b/tests/test_autose_issue_1_fr001.py\nnew file mode 100644\nindex 0000000..186461e\n--- /dev/null\n+++ b/tests/test_autose_issue_1_fr001.py\n@@ -0,0 +1,62 @@\n+from unittest import TestCase\n+\n+import mistune\n+from tests.perf_utils import assert_near_linear\n+\n+\n+class TestAutoseIssue1Fr001(TestCase):\n+    def test_ac_fr_001_1_missing_cell(self):\n+        \"\"\"AC-FR-001-1: Table row with fewer cells than header gets padded with empty cells.\"\"\"\n+        text = \"| Name | Role |\\n|---|---|\\n| Ana |\"\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th>Name</th>\\n\"\n+            \"  <th>Role</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td>Ana</td>\\n\"\n+            \"  <td></td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text), expected)\n+\n+    def test_ac_fr_002_1_extra_cell(self):\n+        \"\"\"AC-FR-002-1: Table row with more cells than header gets truncated to header length.\"\"\"\n+        text = \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\"\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+        expected = (\n+            \"<table>\\n\"\n+            \"<thead>\\n\"\n+            \"<tr>\\n\"\n+            \"  <th>Name</th>\\n\"\n+            \"  <th>Role</th>\\n\"\n+            \"</tr>\\n\"\n+            \"</thead>\\n\"\n+            \"<tbody>\\n\"\n+            \"<tr>\\n\"\n+            \"  <td>Ana</td>\\n\"\n+            \"  <td>Dev</td>\\n\"\n+            \"</tr>\\n\"\n+            \"</tbody>\\n\"\n+            \"</table>\\n\"\n+        )\n+        self.assertEqual(md(text), expected)\n+\n+    def test_ac_nfr_001_1_table_benchmark_performance(self):\n+        \"\"\"AC-NFR-001-1: Table parsing time shows no measurable regression / scales near-linear on benchmark inputs.\"\"\"\n+        md = mistune.create_markdown(plugins=[\"table\"])\n+\n+        def render(size):\n+            rows = \"\\n\".join([f\"| Col1 {i} | Col2 {i} |\" for i in range(size)])\n+            text = \"| Header 1 | Header 2 |\\n| --- | --- |\\n\" + rows + \"\\n\"\n+            return md(text)\n+\n+        _small, html = assert_near_linear(self, render, 500, 1000, warmup_size=100)\n+        self.assertIn(\"Col1 999\", html)\ndiff --git a/tests/test_autose_issue_1_fr003.py b/tests/test_autose_issue_1_fr003.py\nnew file mode 100644\nindex 0000000..88d55a9\n--- /dev/null\n+++ b/tests/test_autose_issue_1_fr003.py\n@@ -0,0 +1,79 @@\n+import mistune\n+\n+\n+def test_ac_fr_003_1():\n+    \"\"\"AC-FR-003-1: Table rendering with matching header and row columns.\"\"\"\n+    text = \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\"\n+    md = mistune.create_markdown(plugins=[\"table\"])\n+    expected = (\n+        \"<table>\\n\"\n+        \"<thead>\\n\"\n+        \"<tr>\\n\"\n+        \"  <th>Name</th>\\n\"\n+        \"  <th>Role</th>\\n\"\n+        \"</tr>\\n\"\n+        \"</thead>\\n\"\n+        \"<tbody>\\n\"\n+        \"<tr>\\n\"\n+        \"  <td>Ana</td>\\n\"\n+        \"  <td>Dev</td>\\n\"\n+        \"</tr>\\n\"\n+        \"</tbody>\\n\"\n+        \"</table>\\n\"\n+    )\n+    assert md(text) == expected\n+\n+\n+def test_ac_fr_004_1():\n+    \"\"\"AC-FR-004-1: Invalid table fallback to paragraph when delimiter column count doesn't match header.\"\"\"\n+    text = \"| Name | Role |\\n|---|\"\n+    md = mistune.create_markdown(plugins=[\"table\"])\n+    expected = \"<p>| Name | Role |\\n|---|</p>\\n\"\n+    assert md(text) == expected\n+\n+\n+def test_table_row_padding_and_truncation():\n+    \"\"\"AC-FR-003-1: Table row cell count mismatch handling (padding fewer cells and truncating excess cells).\"\"\"\n+    md = mistune.create_markdown(plugins=[\"table\"])\n+\n+    # Fewer cells in row than header -> padded with empty string\n+    text_fewer = \"| A | B | C |\\n|---|---|---|\\n| 1 |\"\n+    expected_fewer = (\n+        \"<table>\\n\"\n+        \"<thead>\\n\"\n+        \"<tr>\\n\"\n+        \"  <th>A</th>\\n\"\n+        \"  <th>B</th>\\n\"\n+        \"  <th>C</th>\\n\"\n+        \"</tr>\\n\"\n+        \"</thead>\\n\"\n+        \"<tbody>\\n\"\n+        \"<tr>\\n\"\n+        \"  <td>1</td>\\n\"\n+        \"  <td></td>\\n\"\n+        \"  <td></td>\\n\"\n+        \"</tr>\\n\"\n+        \"</tbody>\\n\"\n+        \"</table>\\n\"\n+    )\n+    assert md(text_fewer) == expected_fewer\n+\n+    # More cells in row than header -> truncated to header length\n+    text_more = \"| A | B |\\n|---|---|\\n| 1 | 2 | 3 |\"\n+    expected_more = (\n+        \"<table>\\n\"\n+        \"<thead>\\n\"\n+        \"<tr>\\n\"\n+        \"  <th>A</th>\\n\"\n+        \"  <th>B</th>\\n\"\n+        \"</tr>\\n\"\n+        \"</thead>\\n\"\n+        \"<tbody>\\n\"\n+        \"<tr>\\n\"\n+        \"  <td>1</td>\\n\"\n+        \"  <td>2</td>\\n\"\n+        \"</tr>\\n\"\n+        \"</tbody>\\n\"\n+        \"</table>\\n\"\n+    )\n+    assert md(text_more) == expected_more\n",
+  "acs": {
+    "AC-FR-001-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\"></td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+    "AC-FR-002-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+    "AC-FR-003-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+    "AC-FR-004-1": "Given Markdown text \"| Name | Role |\\n|---|\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<p>| Name | Role |\\n|</p>\\n\".",
+    "AC-NFR-001-1": "Metric: parsing time | Threshold: Proposed (ASM-001): no measurable regression on benchmark suites | Conditions: standard markdown benchmarks | Method: pytest benchmarking"
+  },
+  "stages": {
+    "spec": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "5 testable ACs"
+      ]
+    },
+    "design": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "test": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "release": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "PR #17, CI green"
+      ]
+    }
+  },
+  "attempts": {
+    "spec": 1,
+    "design": 1,
+    "implement": 1,
+    "test": 1,
+    "release": 1
+  },
+  "loops": {},
+  "feedback": {},
+  "need_tests": false,
+  "allow_no_change": true,
+  "last_ok": true,
+  "weak": [],
+  "redo_items": [],
+  "impl_changed": true,
+  "test_updates": [
+    {
+      "path": "tests/fixtures/table.txt",
+      "acs": [
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "why": "AC-FR-001-1, AC-FR-002-1 (existing test cases asserting that mismatched table row cell counts fall back to paragraph rendering must be updated to expect correctly padded or truncated table output)."
+    }
+  ],
+  "old_failed": [],
+  "failing_tests": [],
+  "work_items": [
+    {
+      "id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-004-1"
+      ],
+      "acs": {
+        "AC-FR-003-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+        "AC-FR-004-1": "Given Markdown text \"| Name | Role |\\n|---|\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<p>| Name | Role |\\n|</p>\\n\"."
+      },
+      "test_file": "tests/test_autose_issue_1_fr003.py",
+      "budget": {
+        "tokens": 1789472
+      }
+    },
+    {
+      "id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1",
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "acs": {
+        "AC-NFR-001-1": "Metric: parsing time | Threshold: Proposed (ASM-001): no measurable regression on benchmark suites | Conditions: standard markdown benchmarks | Method: pytest benchmarking",
+        "AC-FR-001-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\"></td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+        "AC-FR-002-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\"."
+      },
+      "test_file": "tests/test_autose_issue_1_fr001.py",
+      "budget": {
+        "tokens": 1789472
+      }
+    },
+    {
+      "id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "acs": {
+        "AC-FR-001-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\"></td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+        "AC-FR-002-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+        "AC-FR-003-1": "Given Markdown text \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<table>\\n<thead>\\n<tr>\\n  <th style=\\\"text-align:none\\\">Name</th>\\n  <th style=\\\"text-align:none\\\">Role</th>\\n</tr>\\n</thead>\\n<tbody>\\n<tr>\\n  <td style=\\\"text-align:none\\\">Ana</td>\\n  <td style=\\\"text-align:none\\\">Dev</td>\\n</tr>\\n</tbody>\\n</table>\\n\".",
+        "AC-FR-004-1": "Given Markdown text \"| Name | Role |\\n|---|\", when md = mistune.create_markdown(plugins=[\"table\"]) and md(text) is called, then the output is \"<p>| Name | Role |\\n|</p>\\n\".",
+        "AC-NFR-001-1": "Metric: parsing time | Threshold: Proposed (ASM-001): no measurable regression on benchmark suites | Conditions: standard markdown benchmarks | Method: pytest benchmarking"
+      },
+      "test_file": "tests/test_autose_issue_1_e2e.py",
+      "budget": {
+        "tokens": 1789472
+      }
+    }
+  ],
+  "results": [
+    {
+      "work_item_id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-004-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_1_fr003.py",
+      "content": "import mistune\n\n\ndef test_ac_fr_003_1():\n    \"\"\"AC-FR-003-1: Table rendering with matching header and row columns.\"\"\"\n    text = \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\"\n    md = mistune.create_markdown(plugins=[\"table\"])\n    expected = (\n        \"<table>\\n\"\n        \"<thead>\\n\"\n        \"<tr>\\n\"\n        \"  <th>Name</th>\\n\"\n        \"  <th>Role</th>\\n\"\n        \"</tr>\\n\"\n        \"</thead>\\n\"\n        \"<tbody>\\n\"\n        \"<tr>\\n\"\n        \"  <td>Ana</td>\\n\"\n        \"  <td>Dev</td>\\n\"\n        \"</tr>\\n\"\n        \"</tbody>\\n\"\n        \"</table>\\n\"\n    )\n    assert md(text) == expected\n\n\ndef test_ac_fr_004_1():\n    \"\"\"AC-FR-004-1: Invalid table fallback to paragraph when delimiter column count doesn't match header.\"\"\"\n    text = \"| Name | Role |\\n|---|\"\n    md = mistune.create_markdown(plugins=[\"table\"])\n    expected = \"<p>| Name | Role |\\n|---|</p>\\n\"\n    assert md(text) == expected\n\n\ndef test_table_row_padding_and_truncation():\n    \"\"\"AC-FR-003-1: Table row cell count mismatch handling (padding fewer cells and truncating excess cells).\"\"\"\n    md = mistune.create_markdown(plugins=[\"table\"])\n\n    # Fewer cells in row than header -> padded with empty string\n    text_fewer = \"| A | B | C |\\n|---|---|---|\\n| 1 |\"\n    expected_fewer = (\n        \"<table>\\n\"\n        \"<thead>\\n\"\n        \"<tr>\\n\"\n        \"  <th>A</th>\\n\"\n        \"  <th>B</th>\\n\"\n        \"  <th>C</th>\\n\"\n        \"</tr>\\n\"\n        \"</thead>\\n\"\n        \"<tbody>\\n\"\n        \"<tr>\\n\"\n        \"  <td>1</td>\\n\"\n        \"  <td></td>\\n\"\n        \"  <td></td>\\n\"\n        \"</tr>\\n\"\n        \"</tbody>\\n\"\n        \"</table>\\n\"\n    )\n    assert md(text_fewer) == expected_fewer\n\n    # More cells in row than header -> truncated to header length\n    text_more = \"| A | B |\\n|---|---|\\n| 1 | 2 | 3 |\"\n    expected_more = (\n        \"<table>\\n\"\n        \"<thead>\\n\"\n        \"<tr>\\n\"\n        \"  <th>A</th>\\n\"\n        \"  <th>B</th>\\n\"\n        \"</tr>\\n\"\n        \"</thead>\\n\"\n        \"<tbody>\\n\"\n        \"<tr>\\n\"\n        \"  <td>1</td>\\n\"\n        \"  <td>2</td>\\n\"\n        \"</tr>\\n\"\n        \"</tbody>\\n\"\n        \"</table>\\n\"\n    )\n    assert md(text_more) == expected_more\n",
+      "tests": [
+        "test_ac_fr_003_1",
+        "test_ac_fr_004_1",
+        "test_table_row_padding_and_truncation"
+      ],
+      "covered": {
+        "AC-FR-003-1": [
+          "test_ac_fr_003_1",
+          "test_ac_fr_003_1",
+          "test_table_row_padding_and_truncation"
+        ],
+        "AC-FR-004-1": [
+          "test_ac_fr_004_1",
+          "test_ac_fr_004_1"
+        ]
+      },
+      "pytest": "3 passed in 0.03s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 420117,
+      "notes": "1: Expected output specifies `style=\"text-align:none\"`, but mistune omits style attributes when table cell alignment is None.\nAC-CONFLICT: AC-FR-004-1: Expected output omits `---|` in paragraph fallback, whereas mistune preserves the delimiter line text when falling back to paragraph.\n\nImplemented tests covering AC-FR-003-1 and AC-FR-004-1 in `tests/test_autose_issue_1_fr003.py`.\n- Verified successfully with `uv run pytest -q --tb=short tests/test_autose_issue_1_fr003.py` (all tests passed).\n- Checked linting (`uv run ruff check .`) and type checking (`uv run mypy`), both passing successfully.",
+      "ac_conflicts": [
+        "AC-CONFLICT: AC-FR-003-1: Expected output specifies `style=\"text-align:none\"`, but mistune omits style attributes when table cell alignment is None.",
+        "AC-CONFLICT: AC-FR-004-1: Expected output omits `---|` in paragraph fallback, whereas mistune preserves the delimiter line text when falling back to paragraph."
+      ]
+    },
+    {
+      "work_item_id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1",
+        "AC-FR-001-1",
+        "AC-FR-002-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_1_fr001.py",
+      "content": "from unittest import TestCase\n\nimport mistune\nfrom tests.perf_utils import assert_near_linear\n\n\nclass TestAutoseIssue1Fr001(TestCase):\n    def test_ac_fr_001_1_missing_cell(self):\n        \"\"\"AC-FR-001-1: Table row with fewer cells than header gets padded with empty cells.\"\"\"\n        text = \"| Name | Role |\\n|---|---|\\n| Ana |\"\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th>Name</th>\\n\"\n            \"  <th>Role</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td>Ana</td>\\n\"\n            \"  <td></td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text), expected)\n\n    def test_ac_fr_002_1_extra_cell(self):\n        \"\"\"AC-FR-002-1: Table row with more cells than header gets truncated to header length.\"\"\"\n        text = \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\"\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th>Name</th>\\n\"\n            \"  <th>Role</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td>Ana</td>\\n\"\n            \"  <td>Dev</td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text), expected)\n\n    def test_ac_nfr_001_1_table_benchmark_performance(self):\n        \"\"\"AC-NFR-001-1: Table parsing time shows no measurable regression / scales near-linear on benchmark inputs.\"\"\"\n        md = mistune.create_markdown(plugins=[\"table\"])\n\n        def render(size):\n            rows = \"\\n\".join([f\"| Col1 {i} | Col2 {i} |\" for i in range(size)])\n            text = \"| Header 1 | Header 2 |\\n| --- | --- |\\n\" + rows + \"\\n\"\n            return md(text)\n\n        _small, html = assert_near_linear(self, render, 500, 1000, warmup_size=100)\n        self.assertIn(\"Col1 999\", html)\n",
+      "tests": [
+        "test_ac_fr_001_1_missing_cell",
+        "test_ac_fr_002_1_extra_cell",
+        "test_ac_nfr_001_1_table_benchmark_performance"
+      ],
+      "covered": {
+        "AC-NFR-001-1": [
+          "test_ac_nfr_001_1_table_benchmark_performance",
+          "test_ac_nfr_001_1_table_benchmark_performance"
+        ],
+        "AC-FR-001-1": [
+          "test_ac_fr_001_1_missing_cell",
+          "test_ac_fr_001_1_missing_cell"
+        ],
+        "AC-FR-002-1": [
+          "test_ac_fr_002_1_extra_cell",
+          "test_ac_fr_002_1_extra_cell"
+        ]
+      },
+      "pytest": "3 passed in 0.12s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 476398,
+      "notes": "le=\"text-align:none\"` on table cells/headers, but mistune's HTML table renderer outputs standard `<th>` and `<td>` elements without inline style attributes, matching the library's existing fixtures (`tests/fixtures/table.txt`).\n\nSummary of work:\n- Created `tests/test_autose_issue_1_fr001.py` covering all acceptance criteria (AC-NFR-001-1, AC-FR-001-1, AC-FR-002-1).\n- Verified behavior through public API (`mistune.create_markdown(plugins=[\"table\"])`).\n- Ran `uv run pytest -q --tb=short tests/test_autose_issue_1_fr001.py`, `uv run ruff check --fix .`, and `uv run mypy`, all passing successfully.",
+      "ac_conflicts": [
+        "AC-CONFLICT: AC-FR-001-1, AC-FR-002-1: AC expected output specified `style=\"text-align:none\"` on table cells/headers, but mistune's HTML table renderer outputs standard `<th>` and `<td>` elements without inline style attributes, matching the library's existing fixtures (`tests/fixtures/table.txt`)."
+      ]
+    },
+    {
+      "work_item_id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_1_e2e.py",
+      "content": "from unittest import TestCase\n\nimport mistune\n\n\nclass TestAutoseIssue1E2E(TestCase):\n    def test_e2e_table_ac_missing_and_extra_cells(self):\n        # AC-FR-001-1: Given Markdown text with fewer cells than header, padded with empty cell\n        text_missing = \"| Name | Role |\\n|---|---|\\n| Ana |\"\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected_missing = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th>Name</th>\\n\"\n            \"  <th>Role</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td>Ana</td>\\n\"\n            \"  <td></td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text_missing), expected_missing)\n\n        # AC-FR-002-1: Given Markdown text with more cells than header, truncated to header length\n        text_extra = \"| Name | Role |\\n|---|---|\\n| Ana | Dev | extra |\"\n        expected_extra = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th>Name</th>\\n\"\n            \"  <th>Role</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td>Ana</td>\\n\"\n            \"  <td>Dev</td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text_extra), expected_extra)\n\n        # AC-FR-003-1: Given Markdown text with exact matching cells\n        text_match = \"| Name | Role |\\n|---|---|\\n| Ana | Dev |\"\n        self.assertEqual(md(text_match), expected_extra)\n\n    def test_e2e_table_ac_invalid_delimiter(self):\n        # AC-FR-004-1: Given Markdown text with invalid delimiter count, falls back to paragraph\n        text = \"| Name | Role |\\n|---|\"\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected = \"<p>| Name | Role |\\n|---|</p>\\n\"\n        self.assertEqual(md(text), expected)\n\n    def test_e2e_table_combined_plugins_and_options(self):\n        # Combining table plugin, speedup plugin, and escape=False with cell formatting\n        text = \"| Item | Price |\\n| :--- | ---: |\\n| **Apple** | $1.50 |\"\n        md = mistune.create_markdown(escape=False, plugins=[\"table\", \"speedup\"])\n        expected = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th style=\\\"text-align:left\\\">Item</th>\\n\"\n            \"  <th style=\\\"text-align:right\\\">Price</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td style=\\\"text-align:left\\\"><strong>Apple</strong></td>\\n\"\n            \"  <td style=\\\"text-align:right\\\">$1.50</td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text), expected)\n\n    def test_e2e_regression_standard_table_with_formatting(self):\n        # Regression test 1: Standard table with explicit alignments and inline formatting\n        text = (\n            \"| Left | Center | Right |\\n\"\n            \"| :--- | :---: | ---: |\\n\"\n            \"| *a* | b | c |\\n\"\n            \"| d | e | f |\\n\"\n        )\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th style=\\\"text-align:left\\\">Left</th>\\n\"\n            \"  <th style=\\\"text-align:center\\\">Center</th>\\n\"\n            \"  <th style=\\\"text-align:right\\\">Right</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td style=\\\"text-align:left\\\"><em>a</em></td>\\n\"\n            \"  <td style=\\\"text-align:center\\\">b</td>\\n\"\n            \"  <td style=\\\"text-align:right\\\">c</td>\\n\"\n            \"</tr>\\n\"\n            \"<tr>\\n\"\n            \"  <td style=\\\"text-align:left\\\">d</td>\\n\"\n            \"  <td style=\\\"text-align:center\\\">e</td>\\n\"\n            \"  <td style=\\\"text-align:right\\\">f</td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text), expected)\n\n    def test_e2e_regression_table_missing_cells_multiline(self):\n        # Regression test 2: Table with 3 columns where data row has fewer cells\n        text = (\n            \"A | B | C\\n\"\n            \"- | - | -\\n\"\n            \"a | b\\n\"\n        )\n        md = mistune.create_markdown(plugins=[\"table\"])\n        expected = (\n            \"<table>\\n\"\n            \"<thead>\\n\"\n            \"<tr>\\n\"\n            \"  <th>A</th>\\n\"\n            \"  <th>B</th>\\n\"\n            \"  <th>C</th>\\n\"\n            \"</tr>\\n\"\n            \"</thead>\\n\"\n            \"<tbody>\\n\"\n            \"<tr>\\n\"\n            \"  <td>a</td>\\n\"\n            \"  <td>b</td>\\n\"\n            \"  <td></td>\\n\"\n            \"</tr>\\n\"\n            \"</tbody>\\n\"\n            \"</table>\\n\"\n        )\n        self.assertEqual(md(text), expected)\n",
+      "tests": [
+        "test_e2e_table_ac_missing_and_extra_cells",
+        "test_e2e_table_ac_invalid_delimiter",
+        "test_e2e_table_combined_plugins_and_options",
+        "test_e2e_regression_standard_table_with_formatting",
+        "test_e2e_regression_table_missing_cells_multiline"
+      ],
+      "covered": {},
+      "pytest": "5 passed in 0.02s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 580660,
+      "notes": "- Written comprehensive end-to-end and regression tests in `tests/test_autose_issue_1_e2e.py` (5 tests covering missing/extra cell handling, invalid delimiter fallback, combined plugins/options, alignment/formatting regressions, and multiline table parsing).\n- Verified all tests pass successfully (`uv run pytest -q --tb=short tests/test_autose_issue_1_e2e.py`).\n- Checked and passed all linting (`ruff check .`) and type checking (`mypy`).",
+      "ac_conflicts": []
+    }
+  ],
+  "pr": 17,
+  "pr_url": "https://github.com/QasimANaik/mistune/pull/17",
+  "ci": {
+    "url": "https://github.com/QasimANaik/mistune/actions/runs/45395578174",
+    "flake_reruns": 0,
+    "conclusion": "success",
+    "attempt": 1
+  },
+  "status": "pr_open",
+  "tokens": 2766653,
+  "events": [
+    {
+      "t": "2026-11-24T12:35:37Z",
+      "stage": "intake",
+      "msg": "build run https://github.com/QasimANaik/mistune/actions/runs/45394898264"
+    },
+    {
+      "t": "2026-11-24T12:36:23Z",
+      "stage": "spec",
+      "msg": "passed: 5 acceptance criteria"
+    },
+    {
+      "t": "2026-11-24T12:36:49Z",
+      "stage": "design",
+      "msg": "passed; existing tests to update: ['tests/fixtures/table.txt']"
+    },
+    {
+      "t": "2026-11-24T12:37:52Z",
+      "stage": "implement",
+      "msg": "passed []"
+    },
+    {
+      "t": "2026-11-24T12:37:52Z",
+      "stage": "test",
+      "msg": "orchestrator: 3 worker(s) in parallel: c1r1=['AC-FR-003-1', 'AC-FR-004-1'], c2r1=['AC-NFR-001-1', 'AC-FR-001-1', 'AC-FR-002-1'], e2er1=e2e"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c1r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c2r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker e2er1: complete"
+    },
+    {
+      "t": "2026-11-24T12:39:02Z",
+      "stage": "test",
+      "msg": "merge: passed []"
+    },
+    {
+      "t": "2026-11-24T12:42:38Z",
+      "stage": "release",
+      "msg": "PR #17; CI success https://github.com/QasimANaik/mistune/actions/runs/45395578174"
+    }
+  ]
+}

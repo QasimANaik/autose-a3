@@ -1,0 +1,35 @@
+{
+  "name": "build-w04-c4r1",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_s": 55.5,
+  "tool_calls": 29,
+  "denied_tool_calls": 1,
+  "stats": {
+    "total_tokens": 743084,
+    "input_tokens": 733718,
+    "output_tokens": 3383,
+    "cached": 626967,
+    "input": 106751,
+    "duration_ms": 53598,
+    "tool_calls": 29,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 738850,
+        "input_tokens": 729880,
+        "output_tokens": 3286,
+        "cached": 626967,
+        "input": 102913
+      },
+      "gemini-3-flash-preview": {
+        "total_tokens": 4234,
+        "input_tokens": 3838,
+        "output_tokens": 97,
+        "cached": 0,
+        "input": 3838
+      }
+    }
+  },
+  "error": ""
+}

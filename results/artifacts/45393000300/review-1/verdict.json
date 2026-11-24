@@ -1,0 +1,20 @@
+{
+  "verdict": "approve",
+  "route": "none",
+  "summary": "The pull request correctly handles trailing punctuation and balanced parentheses in URLs for the url plugin, verified through comprehensive new tests, passing test suites, and clean lint/type checks.",
+  "checked": [
+    "uv run pytest -q --tb=short",
+    "uv run ruff check .",
+    "uv run mypy src",
+    "uv run python -c issue reproduction examples"
+  ],
+  "findings": [],
+  "discarded_findings": [],
+  "round": "1",
+  "model": "gemini-3.5-flash-lite",
+  "variant": "baseline",
+  "pr": 16,
+  "head_sha": "3b42a151e692053554b2fb822b5110afc0a2e439",
+  "issue": 2,
+  "tokens": 259612
+}

@@ -1,0 +1,28 @@
+{
+  "name": "build-w03-e2er1",
+  "model": "gemini-3.5-flash-lite",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_s": 53.6,
+  "tool_calls": 19,
+  "denied_tool_calls": 0,
+  "stats": {
+    "total_tokens": 445263,
+    "input_tokens": 436362,
+    "output_tokens": 4192,
+    "cached": 359574,
+    "input": 76788,
+    "duration_ms": 51283,
+    "tool_calls": 19,
+    "models": {
+      "gemini-3.5-flash-lite": {
+        "total_tokens": 445263,
+        "input_tokens": 436362,
+        "output_tokens": 4192,
+        "cached": 359574,
+        "input": 76788
+      }
+    }
+  },
+  "error": ""
+}

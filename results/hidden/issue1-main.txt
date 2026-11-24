@@ -23,8 +23,8 @@ ______________________ test_one_bad_row_keeps_whole_table ______________________
         html = md(src)
 >       assert html.count("<table>") == 1
 E       AssertionError: assert 0 == 1
-E        +  where 0 = <built-in method count of str object at 0x79940c7feb50>('<table>')
-E        +    where <built-in method count of str object at 0x79940c7feb50> = '<p>| a | b |\n|---|---|\n| 1 | 2 |\n| 3 |\n| 5 | 6 |</p>\n'.count
+E        +  where 0 = <built-in method count of str object at 0x72b836f41e90>('<table>')
+E        +    where <built-in method count of str object at 0x72b836f41e90> = '<p>| a | b |\n|---|---|\n| 1 | 2 |\n| 3 |\n| 5 | 6 |</p>\n'.count
 
 tests/test_hidden_issue1.py:27: AssertionError
 ___________________ test_padded_cell_keeps_column_alignment ____________________
@@ -40,4 +40,4 @@ FAILED tests/test_hidden_issue1.py::test_short_row_padded_with_empty_cell - A...
 FAILED tests/test_hidden_issue1.py::test_extra_cell_is_dropped - AssertionErr...
 FAILED tests/test_hidden_issue1.py::test_one_bad_row_keeps_whole_table - Asse...
 FAILED tests/test_hidden_issue1.py::test_padded_cell_keeps_column_alignment
-4 failed in 0.08s
+4 failed in 0.09s

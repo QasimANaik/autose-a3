@@ -1,0 +1,310 @@
+{
+  "issue": 2,
+  "variant": "baseline",
+  "mode": "build",
+  "round": "",
+  "issue_data": {
+    "body": "We use `plugins=[\"url\"]` so plain URLs in user comments become links. Two problems keep coming up:\n\n1. Wikipedia links with parentheses get cut:\n\n```python\nmd = mistune.create_markdown(plugins=[\"url\"])\nmd(\"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\")\n```\ngives\n```html\n<p>see <a href=\"https://en.wikipedia.org/wiki/Python_(programming_language\">https://en.wikipedia.org/wiki/Python_(programming_language</a>) for details</p>\n```\nso the link goes to a 404 page.\n\n2. When someone asks a question ending with a link, the `?` becomes part of the URL:\n\n```python\nmd(\"did you try https://example.com/docs?\")\n# <a href=\"https://example.com/docs?\">https://example.com/docs?</a>\n```\n\nSame with `!`. A period or comma at the end is already handled correctly, so I guess `?` and `!` were just missed. GitHub keeps balanced parentheses in the URL and drops trailing punctuation like `?` and `!`.\n",
+    "number": 2,
+    "title": "url plugin cuts off Wikipedia links and grabs the question mark at the end",
+    "url": "https://github.com/QasimANaik/mistune/issues/2"
+  },
+  "injection_flags": [],
+  "base": "ed4b269fde1052614914caceb0245d4b64286a65",
+  "branch": "autose/issue-2",
+  "patch": "diff --git a/src/mistune/plugins/url.py b/src/mistune/plugins/url.py\nindex d4c0cd0..0ce6f3d 100644\n--- a/src/mistune/plugins/url.py\n+++ b/src/mistune/plugins/url.py\n@@ -9,7 +9,22 @@ if TYPE_CHECKING:\n \n __all__ = [\"url\"]\n \n-URL_LINK_PATTERN = r\"\"\"https?:\\/\\/[^\\s<]+[^<.,:;\"')\\]\\s]\"\"\"\n+URL_LINK_PATTERN = r\"\"\"https?:\\/\\/[^\\s<]+\"\"\"\n+\n+\n+def clean_url_text(text: str) -> str:\n+    while text:\n+        last = text[-1]\n+        if last in '.,;:?!\\'\"':\n+            text = text[:-1]\n+        elif last == ')':\n+            if text.count('(') < text.count(')'):\n+                text = text[:-1]\n+            else:\n+                break\n+        else:\n+            break\n+    return text\n \n \n def parse_url_link(inline: \"InlineParser\", m: Match[str], state: \"InlineState\") -> int:\n@@ -20,6 +35,10 @@ def parse_url_link(inline: \"InlineParser\", m: Match[str], state: \"InlineState\")\n         if close >= 0:\n             text = text[:close]\n             pos = m.start() + close\n+\n+    text = clean_url_text(text)\n+    pos = m.start() + len(text)\n+\n     if state.in_link or state.depth >= inline.max_nested_level:\n         inline.process_text(text, state)\n         return pos\ndiff --git a/tests/test_autose_issue_2_e2e.py b/tests/test_autose_issue_2_e2e.py\nnew file mode 100644\nindex 0000000..204d2ba\n--- /dev/null\n+++ b/tests/test_autose_issue_2_e2e.py\n@@ -0,0 +1,110 @@\n+from time import perf_counter\n+from unittest import TestCase\n+\n+import mistune\n+\n+\n+class TestAutoseIssue2E2E(TestCase):\n+    def test_url_plugin_acceptance_criteria_parentheses_and_punctuation(self):\n+        # AC-FR-001-1, AC-FR-002-1, AC-FR-002-2, AC-FR-003-1, AC-FR-003-2\n+        md = mistune.create_markdown(escape=False, plugins=[\"url\"])\n+\n+        # AC-FR-001-1\n+        text1 = \"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\"\n+        res1 = md(text1)\n+        self.assertIn(\n+            '<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>',\n+            res1,\n+        )\n+\n+        # AC-FR-002-1\n+        text2 = \"did you try https://example.com/docs?\"\n+        res2 = md(text2)\n+        self.assertIn(\n+            '<a href=\"https://example.com/docs\">https://example.com/docs</a>?',\n+            res2,\n+        )\n+\n+        # AC-FR-002-2\n+        text3 = \"check https://example.com/path! for info\"\n+        res3 = md(text3)\n+        self.assertIn(\n+            '<a href=\"https://example.com/path\">https://example.com/path</a>!',\n+            res3,\n+        )\n+\n+        # AC-FR-003-1\n+        text4 = \"visit https://example.com.\"\n+        res4 = md(text4)\n+        self.assertIn(\n+            '<a href=\"https://example.com\">https://example.com</a>.',\n+            res4,\n+        )\n+\n+        # AC-FR-003-2\n+        text5 = \"see https://example.com, and more\"\n+        res5 = md(text5)\n+        self.assertIn(\n+            '<a href=\"https://example.com\">https://example.com</a>, and more',\n+            res5,\n+        )\n+\n+    def test_url_plugin_combined_with_other_plugins_and_brackets(self):\n+        # AC-FR-004-1 and combined plugins (url, strikethrough, speedup)\n+        md = mistune.create_markdown(escape=False, plugins=[\"url\", \"strikethrough\", \"speedup\"])\n+\n+        text = \"[link https://example.com] and ~~strikethrough text~~ with https://example.com/test?a=1\"\n+        res = md(text)\n+        self.assertIn('<del>strikethrough text</del>', res)\n+        self.assertIn('<a href=\"https://example.com/test?a=1\">https://example.com/test?a=1</a>', res)\n+\n+    def test_url_plugin_performance_scaling_nfr(self):\n+        # AC-NFR-001-1: O(n) relative to text length\n+        md = mistune.create_markdown(escape=False, plugins=[\"url\", \"speedup\"])\n+\n+        base_str = \"Check https://example.com/path/to/resource?query=1&b=2 for details. \"\n+        text_small = base_str * 100\n+        text_large = base_str * 1000\n+\n+        t0 = perf_counter()\n+        res_small = md(text_small)\n+        t1 = perf_counter()\n+        duration_small = t1 - t0\n+\n+        t0 = perf_counter()\n+        res_large = md(text_large)\n+        t1 = perf_counter()\n+        duration_large = t1 - t0\n+\n+        # Verify output integrity and reasonable linear/sub-quadratic scaling\n+        self.assertIn('<a href=\"https://example.com', res_small)\n+        self.assertIn('<a href=\"https://example.com', res_large)\n+        self.assertLess(duration_large, duration_small * 50 + 0.5)\n+\n+    def test_regression_explicit_links_and_autolinks(self):\n+        # Regression test 1: explicit markdown links and angle-bracket autolinks work correctly whether url plugin is present or not\n+        md_default = mistune.create_markdown(escape=False)\n+        md_url = mistune.create_markdown(escape=False, plugins=[\"url\"])\n+\n+        text = \"Visit [Mistune](https://github.com/lepture/mistune) or <https://python.org>.\"\n+        res_default = md_default(text)\n+        res_url = md_url(text)\n+\n+        self.assertIn('<a href=\"https://github.com/lepture/mistune\">Mistune</a>', res_default)\n+        self.assertIn('<a href=\"https://python.org\">https://python.org</a>', res_default)\n+        self.assertIn('<a href=\"https://github.com/lepture/mistune\">Mistune</a>', res_url)\n+        self.assertIn('<a href=\"https://python.org\">https://python.org</a>', res_url)\n+\n+    def test_regression_urls_in_block_elements_and_plugin_toggle(self):\n+        # Regression test 2: URLs in block elements (lists, blockquotes) and behavior when url plugin is omitted vs included\n+        text = \"- Check https://python.org/\\n> Info at https://example.com.\"\n+\n+        md_no_plugin = mistune.create_markdown(escape=False)\n+        res_no_plugin = md_no_plugin(text)\n+        self.assertNotIn('<a href=\"https://python.org/\">', res_no_plugin)\n+        self.assertNotIn('<a href=\"https://example.com\">', res_no_plugin)\n+\n+        md_with_plugin = mistune.create_markdown(escape=False, plugins=[\"url\"])\n+        res_with_plugin = md_with_plugin(text)\n+        self.assertIn('<li>Check <a href=\"https://python.org/\">https://python.org/</a></li>', res_with_plugin)\n+        self.assertIn('<blockquote>\\n<p>Info at <a href=\"https://example.com\">https://example.com</a>.</p>\\n</blockquote>', res_with_plugin)\ndiff --git a/tests/test_autose_issue_2_fr001.py b/tests/test_autose_issue_2_fr001.py\nnew file mode 100644\nindex 0000000..886596c\n--- /dev/null\n+++ b/tests/test_autose_issue_2_fr001.py\n@@ -0,0 +1,32 @@\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+\n+\n+class TestAutoseIssue2FR001(TestCase):\n+    def test_ac_fr_003_1(self):\n+        \"\"\"AC-FR-003-1: Given Markdown input 'visit https://example.com.', when markdown is created with plugins=['url'], then output HTML contains '<a href=\\\"https://example.com\\\">https://example.com</a>.'.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"visit https://example.com.\")\n+        self.assertIn('<a href=\"https://example.com\">https://example.com</a>.', result)\n+\n+    def test_ac_fr_003_2(self):\n+        \"\"\"AC-FR-003-2: Given Markdown input 'see https://example.com, and more', when markdown is created with plugins=['url'], then output HTML contains '<a href=\\\"https://example.com\\\">https://example.com</a>, and more'.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"see https://example.com, and more\")\n+        self.assertIn('<a href=\"https://example.com\">https://example.com</a>, and more', result)\n+\n+    def test_ac_fr_001_1(self):\n+        \"\"\"AC-FR-001-1: Given Markdown input 'see https://en.wikipedia.org/wiki/Python_(programming_language) for details', when markdown is created with plugins=['url'], then output HTML contains link with parentheses.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\")\n+        self.assertIn(\n+            '<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>',\n+            result\n+        )\n+\n+    def test_ac_fr_004_1(self):\n+        \"\"\"AC-FR-004-1: Given Markdown input '[link https://example.com]', when markdown is created with plugins=['url'], then output HTML handles brackets according to existing mistune url plugin rules.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"[link https://example.com]\")\n+        self.assertIn('href=\"https://example.com\"', result)\ndiff --git a/tests/test_autose_issue_2_fr002.py b/tests/test_autose_issue_2_fr002.py\nnew file mode 100644\nindex 0000000..6d023cc\n--- /dev/null\n+++ b/tests/test_autose_issue_2_fr002.py\n@@ -0,0 +1,28 @@\n+from unittest import TestCase\n+\n+from mistune import create_markdown\n+from tests.perf_utils import assert_near_linear\n+\n+\n+class TestAutoseIssue2Fr002(TestCase):\n+    def test_url_plugin_trailing_question_mark(self):\n+        \"\"\"AC-FR-002-1: Given Markdown input \"did you try https://example.com/docs?\", when markdown is created with plugins=[\"url\"], then output HTML contains <a href=\"https://example.com/docs\">https://example.com/docs</a>?.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"did you try https://example.com/docs?\")\n+        self.assertIn('<a href=\"https://example.com/docs\">https://example.com/docs</a>?', result)\n+\n+    def test_url_plugin_trailing_exclamation_mark(self):\n+        \"\"\"AC-FR-002-2: Given Markdown input \"check https://example.com/path! for info\", when markdown is created with plugins=[\"url\"], then output HTML contains <a href=\"https://example.com/path\">https://example.com/path</a>!.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+        result = md(\"check https://example.com/path! for info\")\n+        self.assertIn('<a href=\"https://example.com/path\">https://example.com/path</a>!', result)\n+\n+    def test_url_plugin_performance_linear(self):\n+        \"\"\"AC-NFR-001-1: Execution time is O(n) relative to text length for URL parsing.\"\"\"\n+        md = create_markdown(plugins=[\"url\"])\n+\n+        def render(size):\n+            text = \" \".join(f\"https://example.com/path/{i}?\" for i in range(size))\n+            return md(text)\n+\n+        assert_near_linear(self, render, 1000, 2000)\n",
+  "acs": {
+    "AC-FR-001-1": "Given Markdown input \"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>`.",
+    "AC-FR-002-1": "Given Markdown input \"did you try https://example.com/docs?\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/docs\">https://example.com/docs</a>?`.",
+    "AC-FR-002-2": "Given Markdown input \"check https://example.com/path! for info\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/path\">https://example.com/path</a>!`.",
+    "AC-FR-003-1": "Given Markdown input \"visit https://example.com.\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>.`.",
+    "AC-FR-003-2": "Given Markdown input \"see https://example.com, and more\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>, and more`.",
+    "AC-FR-004-1": "Given Markdown input \"[link https://example.com]\", when markdown is created with plugins=[\"url\"], then output HTML handles brackets according to existing mistune url plugin rules.",
+    "AC-NFR-001-1": "Metric: execution time | Threshold: O(n) relative to text length | Conditions: benchmark suite | Method: pytest benchmark or perf tests."
+  },
+  "stages": {
+    "spec": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "7 testable ACs"
+      ]
+    },
+    "design": {
+      "status": "passed",
+      "attempts": 2,
+      "notes": [
+        "existing test to update `None` is not an existing file under tests/"
+      ]
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "test": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": []
+    },
+    "release": {
+      "status": "passed",
+      "attempts": 1,
+      "notes": [
+        "PR #16, CI green"
+      ]
+    }
+  },
+  "attempts": {
+    "spec": 1,
+    "design": 2,
+    "implement": 1,
+    "test": 1,
+    "release": 1
+  },
+  "loops": {},
+  "feedback": {
+    "design": "\n\nYour previous design FAILED the pipeline's design check:\n- existing test to update `None` is not an existing file under tests/"
+  },
+  "need_tests": false,
+  "allow_no_change": true,
+  "last_ok": true,
+  "weak": [],
+  "redo_items": [],
+  "impl_changed": true,
+  "test_updates": [],
+  "old_failed": [],
+  "failing_tests": [],
+  "work_items": [
+    {
+      "id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-003-2",
+        "AC-FR-001-1",
+        "AC-FR-004-1"
+      ],
+      "acs": {
+        "AC-FR-003-1": "Given Markdown input \"visit https://example.com.\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>.`.",
+        "AC-FR-003-2": "Given Markdown input \"see https://example.com, and more\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>, and more`.",
+        "AC-FR-001-1": "Given Markdown input \"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>`.",
+        "AC-FR-004-1": "Given Markdown input \"[link https://example.com]\", when markdown is created with plugins=[\"url\"], then output HTML handles brackets according to existing mistune url plugin rules."
+      },
+      "test_file": "tests/test_autose_issue_2_fr001.py",
+      "budget": {
+        "tokens": 1574273
+      }
+    },
+    {
+      "id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1",
+        "AC-FR-002-1",
+        "AC-FR-002-2"
+      ],
+      "acs": {
+        "AC-NFR-001-1": "Metric: execution time | Threshold: O(n) relative to text length | Conditions: benchmark suite | Method: pytest benchmark or perf tests.",
+        "AC-FR-002-1": "Given Markdown input \"did you try https://example.com/docs?\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/docs\">https://example.com/docs</a>?`.",
+        "AC-FR-002-2": "Given Markdown input \"check https://example.com/path! for info\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/path\">https://example.com/path</a>!`."
+      },
+      "test_file": "tests/test_autose_issue_2_fr002.py",
+      "budget": {
+        "tokens": 1574273
+      }
+    },
+    {
+      "id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "acs": {
+        "AC-FR-001-1": "Given Markdown input \"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>`.",
+        "AC-FR-002-1": "Given Markdown input \"did you try https://example.com/docs?\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/docs\">https://example.com/docs</a>?`.",
+        "AC-FR-002-2": "Given Markdown input \"check https://example.com/path! for info\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com/path\">https://example.com/path</a>!`.",
+        "AC-FR-003-1": "Given Markdown input \"visit https://example.com.\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>.`.",
+        "AC-FR-003-2": "Given Markdown input \"see https://example.com, and more\", when markdown is created with plugins=[\"url\"], then output HTML contains `<a href=\"https://example.com\">https://example.com</a>, and more`.",
+        "AC-FR-004-1": "Given Markdown input \"[link https://example.com]\", when markdown is created with plugins=[\"url\"], then output HTML handles brackets according to existing mistune url plugin rules.",
+        "AC-NFR-001-1": "Metric: execution time | Threshold: O(n) relative to text length | Conditions: benchmark suite | Method: pytest benchmark or perf tests."
+      },
+      "test_file": "tests/test_autose_issue_2_e2e.py",
+      "budget": {
+        "tokens": 1574273
+      }
+    }
+  ],
+  "results": [
+    {
+      "work_item_id": "c1r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-FR-003-1",
+        "AC-FR-003-2",
+        "AC-FR-001-1",
+        "AC-FR-004-1"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_2_fr001.py",
+      "content": "from unittest import TestCase\n\nfrom mistune import create_markdown\n\n\nclass TestAutoseIssue2FR001(TestCase):\n    def test_ac_fr_003_1(self):\n        \"\"\"AC-FR-003-1: Given Markdown input 'visit https://example.com.', when markdown is created with plugins=['url'], then output HTML contains '<a href=\\\"https://example.com\\\">https://example.com</a>.'.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"visit https://example.com.\")\n        self.assertIn('<a href=\"https://example.com\">https://example.com</a>.', result)\n\n    def test_ac_fr_003_2(self):\n        \"\"\"AC-FR-003-2: Given Markdown input 'see https://example.com, and more', when markdown is created with plugins=['url'], then output HTML contains '<a href=\\\"https://example.com\\\">https://example.com</a>, and more'.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"see https://example.com, and more\")\n        self.assertIn('<a href=\"https://example.com\">https://example.com</a>, and more', result)\n\n    def test_ac_fr_001_1(self):\n        \"\"\"AC-FR-001-1: Given Markdown input 'see https://en.wikipedia.org/wiki/Python_(programming_language) for details', when markdown is created with plugins=['url'], then output HTML contains link with parentheses.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\")\n        self.assertIn(\n            '<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>',\n            result\n        )\n\n    def test_ac_fr_004_1(self):\n        \"\"\"AC-FR-004-1: Given Markdown input '[link https://example.com]', when markdown is created with plugins=['url'], then output HTML handles brackets according to existing mistune url plugin rules.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"[link https://example.com]\")\n        self.assertIn('href=\"https://example.com\"', result)\n",
+      "tests": [
+        "test_ac_fr_003_1",
+        "test_ac_fr_003_2",
+        "test_ac_fr_001_1",
+        "test_ac_fr_004_1"
+      ],
+      "covered": {
+        "AC-FR-003-1": [
+          "test_ac_fr_003_1",
+          "test_ac_fr_003_1"
+        ],
+        "AC-FR-003-2": [
+          "test_ac_fr_003_2",
+          "test_ac_fr_003_2"
+        ],
+        "AC-FR-001-1": [
+          "test_ac_fr_001_1",
+          "test_ac_fr_001_1"
+        ],
+        "AC-FR-004-1": [
+          "test_ac_fr_004_1",
+          "test_ac_fr_004_1"
+        ]
+      },
+      "pytest": "4 passed in 0.03s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 399436,
+      "notes": "2**: Verified that Markdown input `\"see https://example.com, and more\"` correctly preserves trailing punctuation/text outside the anchor tag.\n- **AC-FR-001-1**: Verified that complex URLs with nested parentheses (e.g., Wikipedia URLs with parentheses) are correctly parsed and linked.\n- **AC-FR-004-1**: Verified that bracketed inputs (`\"[link https://example.com]\"`) are correctly handled according to existing URL plugin rules.\n\nAll tests passed successfully (`uv run pytest -q --tb=short tests/test_autose_issue_2_fr001.py`), and linter and type-checking checks (`ruff` and `mypy`) passed cleanly.",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "c2r1",
+      "kind": "criterion",
+      "criterion_ids": [
+        "AC-NFR-001-1",
+        "AC-FR-002-1",
+        "AC-FR-002-2"
+      ],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_2_fr002.py",
+      "content": "from unittest import TestCase\n\nfrom mistune import create_markdown\nfrom tests.perf_utils import assert_near_linear\n\n\nclass TestAutoseIssue2Fr002(TestCase):\n    def test_url_plugin_trailing_question_mark(self):\n        \"\"\"AC-FR-002-1: Given Markdown input \"did you try https://example.com/docs?\", when markdown is created with plugins=[\"url\"], then output HTML contains <a href=\"https://example.com/docs\">https://example.com/docs</a>?.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"did you try https://example.com/docs?\")\n        self.assertIn('<a href=\"https://example.com/docs\">https://example.com/docs</a>?', result)\n\n    def test_url_plugin_trailing_exclamation_mark(self):\n        \"\"\"AC-FR-002-2: Given Markdown input \"check https://example.com/path! for info\", when markdown is created with plugins=[\"url\"], then output HTML contains <a href=\"https://example.com/path\">https://example.com/path</a>!.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n        result = md(\"check https://example.com/path! for info\")\n        self.assertIn('<a href=\"https://example.com/path\">https://example.com/path</a>!', result)\n\n    def test_url_plugin_performance_linear(self):\n        \"\"\"AC-NFR-001-1: Execution time is O(n) relative to text length for URL parsing.\"\"\"\n        md = create_markdown(plugins=[\"url\"])\n\n        def render(size):\n            text = \" \".join(f\"https://example.com/path/{i}?\" for i in range(size))\n            return md(text)\n\n        assert_near_linear(self, render, 1000, 2000)\n",
+      "tests": [
+        "test_url_plugin_trailing_question_mark",
+        "test_url_plugin_trailing_exclamation_mark",
+        "test_url_plugin_performance_linear"
+      ],
+      "covered": {
+        "AC-NFR-001-1": [
+          "test_url_plugin_performance_linear"
+        ],
+        "AC-FR-002-1": [
+          "test_url_plugin_trailing_question_mark"
+        ],
+        "AC-FR-002-2": [
+          "test_url_plugin_trailing_exclamation_mark"
+        ]
+      },
+      "pytest": "3 passed in 0.13s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 462625,
+      "notes": "**: Tested that URLs followed by a question mark keep the question mark outside the generated `<a href=\"...\">` link in `tests/test_autose_issue_2_fr002.py`.\n- **AC-FR-002-2**: Tested that URLs followed by an exclamation mark keep the exclamation mark outside the generated `<a href=\"...\">` link in `tests/test_autose_issue_2_fr002.py`.\n- **AC-NFR-001-1**: Tested that URL parsing execution time scales linearly (`O(n)`) with text length using `assert_near_linear`.\n- **Verification**: All 1,330 pytest tests passed, ruff linter check passed with no errors, and mypy type checking passed successfully.",
+      "ac_conflicts": []
+    },
+    {
+      "work_item_id": "e2er1",
+      "kind": "e2e",
+      "criterion_ids": [],
+      "status": "complete",
+      "test_file": "tests/test_autose_issue_2_e2e.py",
+      "content": "from time import perf_counter\nfrom unittest import TestCase\n\nimport mistune\n\n\nclass TestAutoseIssue2E2E(TestCase):\n    def test_url_plugin_acceptance_criteria_parentheses_and_punctuation(self):\n        # AC-FR-001-1, AC-FR-002-1, AC-FR-002-2, AC-FR-003-1, AC-FR-003-2\n        md = mistune.create_markdown(escape=False, plugins=[\"url\"])\n\n        # AC-FR-001-1\n        text1 = \"see https://en.wikipedia.org/wiki/Python_(programming_language) for details\"\n        res1 = md(text1)\n        self.assertIn(\n            '<a href=\"https://en.wikipedia.org/wiki/Python_(programming_language)\">https://en.wikipedia.org/wiki/Python_(programming_language)</a>',\n            res1,\n        )\n\n        # AC-FR-002-1\n        text2 = \"did you try https://example.com/docs?\"\n        res2 = md(text2)\n        self.assertIn(\n            '<a href=\"https://example.com/docs\">https://example.com/docs</a>?',\n            res2,\n        )\n\n        # AC-FR-002-2\n        text3 = \"check https://example.com/path! for info\"\n        res3 = md(text3)\n        self.assertIn(\n            '<a href=\"https://example.com/path\">https://example.com/path</a>!',\n            res3,\n        )\n\n        # AC-FR-003-1\n        text4 = \"visit https://example.com.\"\n        res4 = md(text4)\n        self.assertIn(\n            '<a href=\"https://example.com\">https://example.com</a>.',\n            res4,\n        )\n\n        # AC-FR-003-2\n        text5 = \"see https://example.com, and more\"\n        res5 = md(text5)\n        self.assertIn(\n            '<a href=\"https://example.com\">https://example.com</a>, and more',\n            res5,\n        )\n\n    def test_url_plugin_combined_with_other_plugins_and_brackets(self):\n        # AC-FR-004-1 and combined plugins (url, strikethrough, speedup)\n        md = mistune.create_markdown(escape=False, plugins=[\"url\", \"strikethrough\", \"speedup\"])\n\n        text = \"[link https://example.com] and ~~strikethrough text~~ with https://example.com/test?a=1\"\n        res = md(text)\n        self.assertIn('<del>strikethrough text</del>', res)\n        self.assertIn('<a href=\"https://example.com/test?a=1\">https://example.com/test?a=1</a>', res)\n\n    def test_url_plugin_performance_scaling_nfr(self):\n        # AC-NFR-001-1: O(n) relative to text length\n        md = mistune.create_markdown(escape=False, plugins=[\"url\", \"speedup\"])\n\n        base_str = \"Check https://example.com/path/to/resource?query=1&b=2 for details. \"\n        text_small = base_str * 100\n        text_large = base_str * 1000\n\n        t0 = perf_counter()\n        res_small = md(text_small)\n        t1 = perf_counter()\n        duration_small = t1 - t0\n\n        t0 = perf_counter()\n        res_large = md(text_large)\n        t1 = perf_counter()\n        duration_large = t1 - t0\n\n        # Verify output integrity and reasonable linear/sub-quadratic scaling\n        self.assertIn('<a href=\"https://example.com', res_small)\n        self.assertIn('<a href=\"https://example.com', res_large)\n        self.assertLess(duration_large, duration_small * 50 + 0.5)\n\n    def test_regression_explicit_links_and_autolinks(self):\n        # Regression test 1: explicit markdown links and angle-bracket autolinks work correctly whether url plugin is present or not\n        md_default = mistune.create_markdown(escape=False)\n        md_url = mistune.create_markdown(escape=False, plugins=[\"url\"])\n\n        text = \"Visit [Mistune](https://github.com/lepture/mistune) or <https://python.org>.\"\n        res_default = md_default(text)\n        res_url = md_url(text)\n\n        self.assertIn('<a href=\"https://github.com/lepture/mistune\">Mistune</a>', res_default)\n        self.assertIn('<a href=\"https://python.org\">https://python.org</a>', res_default)\n        self.assertIn('<a href=\"https://github.com/lepture/mistune\">Mistune</a>', res_url)\n        self.assertIn('<a href=\"https://python.org\">https://python.org</a>', res_url)\n\n    def test_regression_urls_in_block_elements_and_plugin_toggle(self):\n        # Regression test 2: URLs in block elements (lists, blockquotes) and behavior when url plugin is omitted vs included\n        text = \"- Check https://python.org/\\n> Info at https://example.com.\"\n\n        md_no_plugin = mistune.create_markdown(escape=False)\n        res_no_plugin = md_no_plugin(text)\n        self.assertNotIn('<a href=\"https://python.org/\">', res_no_plugin)\n        self.assertNotIn('<a href=\"https://example.com\">', res_no_plugin)\n\n        md_with_plugin = mistune.create_markdown(escape=False, plugins=[\"url\"])\n        res_with_plugin = md_with_plugin(text)\n        self.assertIn('<li>Check <a href=\"https://python.org/\">https://python.org/</a></li>', res_with_plugin)\n        self.assertIn('<blockquote>\\n<p>Info at <a href=\"https://example.com\">https://example.com</a>.</p>\\n</blockquote>', res_with_plugin)\n",
+      "tests": [
+        "test_url_plugin_acceptance_criteria_parentheses_and_punctuation",
+        "test_url_plugin_combined_with_other_plugins_and_brackets",
+        "test_url_plugin_performance_scaling_nfr",
+        "test_regression_explicit_links_and_autolinks",
+        "test_regression_urls_in_block_elements_and_plugin_toggle"
+      ],
+      "covered": {},
+      "pytest": "5 passed in 0.04s",
+      "passed_alone": true,
+      "reasons": [],
+      "ignored_files": [],
+      "tries": 1,
+      "tokens": 445263,
+      "notes": " `speedup`).\n   - **Test 3**: Exercises AC-NFR-001-1 (performance and O(n) scaling relative to text length).\n   - **Test 4**: Regression test ensuring explicit markdown links (`[text](url)`) and angle-bracket autolinks continue to work correctly regardless of the url plugin.\n   - **Test 5**: Regression test verifying URL parsing inside block elements (lists and blockquotes) and behavior when the `url` plugin is omitted vs included.\n2. **Validation**: Ran `uv run pytest -q --tb=short`, `uv run ruff check .`, and `uv run mypy`. All 1,332 tests passed successfully with zero linter or type errors.",
+      "ac_conflicts": []
+    }
+  ],
+  "pr": 16,
+  "pr_url": "https://github.com/QasimANaik/mistune/pull/16",
+  "ci": {
+    "url": "https://github.com/QasimANaik/mistune/actions/runs/45393760892",
+    "flake_reruns": 0,
+    "conclusion": "success",
+    "attempt": 1
+  },
+  "status": "pr_open",
+  "tokens": 3403798,
+  "events": [
+    {
+      "t": "2026-11-24T12:23:47Z",
+      "stage": "intake",
+      "msg": "build run https://github.com/QasimANaik/mistune/actions/runs/45393000300"
+    },
+    {
+      "t": "2026-11-24T12:24:29Z",
+      "stage": "spec",
+      "msg": "passed: 7 acceptance criteria"
+    },
+    {
+      "t": "2026-11-24T12:25:17Z",
+      "stage": "design",
+      "msg": "check failed: ['existing test to update `None` is not an existing file under tests/']"
+    },
+    {
+      "t": "2026-11-24T12:25:51Z",
+      "stage": "design",
+      "msg": "passed"
+    },
+    {
+      "t": "2026-11-24T12:26:49Z",
+      "stage": "implement",
+      "msg": "passed []; reverted ['tests/fixtures/url.txt']"
+    },
+    {
+      "t": "2026-11-24T12:26:49Z",
+      "stage": "test",
+      "msg": "orchestrator: 3 worker(s) in parallel: c1r1=['AC-FR-003-1', 'AC-FR-003-2', 'AC-FR-001-1', 'AC-FR-004-1'], c2r1=['AC-NFR-001-1', 'AC-FR-002-1', 'AC-FR-002-2'], e2er1=e2e"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c1r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker c2r1: complete"
+    },
+    {
+      "t": "",
+      "stage": "test",
+      "msg": "worker e2er1: complete"
+    },
+    {
+      "t": "2026-11-24T12:27:48Z",
+      "stage": "test",
+      "msg": "merge: passed []"
+    },
+    {
+      "t": "2026-11-24T12:31:24Z",
+      "stage": "release",
+      "msg": "PR #16; CI success https://github.com/QasimANaik/mistune/actions/runs/45393760892"
+    }
+  ]
+}
