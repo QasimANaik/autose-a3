@@ -180,7 +180,7 @@ class Nodes:
             upd.update(acs=acs, stages=mark(state, "spec", "passed", f"{len(acs)} testable ACs", bump=True),
                        events=ev("spec", f"passed: {len(acs)} acceptance criteria"))
         else:
-            upd.update(stages=mark(state, "spec", "running", bump=True),
+            upd.update(stages=mark(state, "spec", "running", "; ".join(chk.reasons)[:500], bump=True),
                        feedback={**(state.get("feedback") or {}), "spec": "Your previous attempt FAILED the "
                                  "pipeline's spec check. Fix these problems:\n" + "\n".join(f"- {r}" for r in chk.reasons)},
                        events=ev("spec", f"check failed: {chk.reasons}"))
@@ -216,7 +216,7 @@ class Nodes:
             upd.update(stages=mark(state, "design", "passed", bump=True), events=ev("design", "passed"))
         else:
             base = (state.get("feedback") or {}).get("design", "").split("\n\nYour previous design FAILED")[0]
-            upd.update(stages=mark(state, "design", "running", bump=True),
+            upd.update(stages=mark(state, "design", "running", "; ".join(chk.reasons)[:500], bump=True),
                        feedback={**(state.get("feedback") or {}), "design": base + "\n\nYour previous design FAILED "
                                  "the pipeline's design check:\n" + "\n".join(f"- {r}" for r in chk.reasons)},
                        events=ev("design", f"check failed: {chk.reasons}"))
@@ -239,6 +239,7 @@ class Nodes:
         self.artifact("implement_check.md", f"# Stage 3 check (attempt {n})\n\n{chk.text()}"
                       + (f"\nReverted changes outside src/: {reverted}\n" if reverted else ""))
         upd: dict[str, Any] = {"tokens": res.total_tokens, "last_ok": chk.ok, "attempts": bump(state, "implement"),
+                               "impl_changed": changed,
                                "events": ev("implement", f"{'passed' if chk.ok else 'failed'} {chk.reasons}"
                                             + (f"; reverted {reverted}" if reverted else ""))}
         if chk.ok:
@@ -247,7 +248,7 @@ class Nodes:
             upd.update(stages=mark(state, "implement", "passed", bump=True), allow_no_change=True)
         else:  # the working tree is kept so the next attempt can fix the reported errors
             base = fb.split("\n\nYour previous attempt FAILED the build check")[0]
-            upd.update(stages=mark(state, "implement", "running", bump=True),
+            upd.update(stages=mark(state, "implement", "running", "; ".join(chk.reasons)[:500], bump=True),
                        feedback={**(state.get("feedback") or {}),
                                  "implement": base + "\n\nYour previous attempt FAILED the build check:\n" + chk.text()})
         return upd
@@ -255,27 +256,36 @@ class Nodes:
     # ------------------------------------------------------------ stage 4a: orchestrator (code) -> Send workers
     def orchestrator(self, state: AutoSEState) -> dict[str, Any]:
         acs = state.get("acs") or {}
-        ids = list(state.get("weak") or acs.keys())
-        groups: dict[str, list[str]] = {}
-        for a in ids:  # one group per requirement (AC-FR-001-*), then merged down to max_workers
-            groups.setdefault(re.sub(r"-\d+$", "", a), []).append(a)
-        glist = list(groups.values())
-        maxw = int(self.c.cfg["budgets"].get("max_workers", 4))
-        while len(glist) > maxw:
-            glist.sort(key=len)
-            a, b = glist.pop(0), glist.pop(0)
-            glist.append(a + b)
         n = state["issue"]
-        rnd = int((state.get("loops") or {}).get("cover", 0)) + 1
+        rnd = int((state.get("loops") or {}).get("cover", 0)) + int((state.get("loops") or {}).get("dispute", 0)) + 1
         left = self.c.cfg["budgets"]["max_run_tokens"] - int(state.get("tokens") or 0)
-        share = int(left * 0.8 / max(1, len(glist) + (1 if len(glist) >= 2 else 0)))  # 20% reserve
-        items = [{"id": f"c{i + 1}r{rnd}", "kind": "criterion", "criterion_ids": g, "acs": {a: acs[a] for a in g},
-                  "test_file": f"tests/test_autose_issue_{n}_c{i + 1}.py", "budget": {"tokens": share}}
-                 for i, g in enumerate(sorted(glist))]
-        if len(glist) >= 2 and not state.get("weak"):
-            items.append({"id": f"e2er{rnd}", "kind": "e2e", "criterion_ids": [], "acs": acs,
-                          "test_file": f"tests/test_autose_issue_{n}_e2e.py", "budget": {"tokens": share}})
-        return {"work_items": items, "results": [RESET], "attempts": bump(state, "test"),
+        redo = state.get("redo_items") or []
+        if redo:  # test/implementation disagreement: re-check exactly the failing files, nothing else
+            share = int(left * 0.8 / max(1, len(redo)))
+            items = [{**it, "id": f"{it['kind'][0]}{i + 1}r{rnd}", "budget": {"tokens": share}} for i, it in enumerate(redo)]
+        else:
+            ids = list(state.get("weak") or acs.keys())
+            groups: dict[str, list[str]] = {}
+            for a in ids:  # one group per requirement (AC-FR-001-*), then merged down to max_workers
+                groups.setdefault(re.sub(r"-\d+$", "", a), []).append(a)
+            glist = list(groups.values())
+            maxw = int(self.c.cfg["budgets"].get("max_workers", 4))
+            while len(glist) > maxw:
+                glist.sort(key=len)
+                a, b = glist.pop(0), glist.pop(0)
+                glist.append(a + b)
+            share = int(left * 0.8 / max(1, len(glist) + (1 if len(glist) >= 2 else 0)))  # 20% reserve
+
+            def slug(g: list[str]) -> str:  # stable per group, so a re-check rewrites the same file
+                return re.sub(r"[^a-z0-9]", "", re.sub(r"-\d+$", "", sorted(g)[0]).lower().replace("ac-", ""))
+
+            items = [{"id": f"c{i + 1}r{rnd}", "kind": "criterion", "criterion_ids": g, "acs": {a: acs[a] for a in g},
+                      "test_file": f"tests/test_autose_issue_{n}_{slug(g)}.py", "budget": {"tokens": share}}
+                     for i, g in enumerate(sorted(glist))]
+            if len(glist) >= 2 and not state.get("weak"):
+                items.append({"id": f"e2er{rnd}", "kind": "e2e", "criterion_ids": [], "acs": acs,
+                              "test_file": f"tests/test_autose_issue_{n}_e2e.py", "budget": {"tokens": share}})
+        return {"work_items": items, "results": [RESET], "redo_items": [], "attempts": bump(state, "test"),
                 "stages": mark(state, "test", "running", bump=True),
                 "events": ev("test", f"orchestrator: {len(items)} worker(s) in parallel: "
                                      + ", ".join(f"{i['id']}={i['criterion_ids'] or 'e2e'}" for i in items))}
@@ -312,7 +322,21 @@ class Nodes:
             upd.update(self.commit(state, "ruff --fix on new tests"))
         failed = sorted(set(re.findall(r"^FAILED (tests/[^:\s]+)", output, re.M)))
         old_failed = [f for f in failed if f not in new_files]
+        new_failed = [f for f in failed if f in new_files]
+        results = state.get("results") or []
+        redo = [{k: r[k] for k in ("kind", "criterion_ids", "test_file")} | {"acs": {a: (state.get("acs") or {}).get(a, "")
+                for a in r["criterion_ids"]} or (state.get("acs") or {})}
+                for r in results if r["test_file"] in new_failed]
+        conflicts = sorted({c for r in results for c in r.get("ac_conflicts", [])})
         chk = Check(not reasons, reasons, lint_out if not lint_ok else "")
+        disputes = int((state.get("loops") or {}).get("dispute", 0))
+        if (not ok and new_failed and not old_failed and not state.get("impl_changed", True)
+                and disputes >= int(self.c.cfg["retries"].get("test_dispute", 1))):
+            upd.update(status="failed", stopped_at="test",
+                       stop_reason=f"tests and implementation disagree: {new_failed} still fail after the test workers "
+                                   "re-checked them and the implementer kept its code. An acceptance criterion may be "
+                                   "wrong; a human should decide."
+                                   + (f" Workers reported: {'; '.join(conflicts)}" if conflicts else ""))
         cov_rows = "\n".join(f"| {a} | {'<br>'.join(t) or '**MISSING**'} |" for a, t in cover.items())
         self.artifact("test_report.md",
                       f"# test_report.md (issue #{state['issue']})\n\n**Full suite:** {'PASS' if ok else 'FAIL'}: "
@@ -320,8 +344,11 @@ class Nodes:
                       f"Alone | Tokens |\n|---|---|---|---|---|---|---|\n" + "\n".join(rows)
                       + f"\n\n## Acceptance criteria → tests\n| AC | Tests |\n|---|---|\n{cov_rows}\n\n"
                       f"## Stage 4 check (orchestrator)\n\n{chk.text()}\n"
+                      + ("\n## Acceptance-criteria conflicts reported by test workers\n" + "\n".join(f"- {c}" for c in conflicts) + "\n"
+                         if conflicts else "")
                       + ("" if ok else f"\n## Failing output\n\n```\n{output[-5000:]}\n```\n"))
         upd.update(last_ok=chk.ok, weak=missing if ok else [], need_tests=False,
+                   redo_items=redo if (not ok and new_failed and not old_failed) else [],
                    events=ev("test", f"merge: {'passed' if chk.ok else 'failed'} {reasons}"))
         if chk.ok:
             upd["stages"] = mark(state, "test", "passed")
@@ -334,7 +361,15 @@ class Nodes:
                                "Tests are failing. Make them pass by fixing the implementation (tests cannot be "
                                f"edited in this stage):{scope}\n```\n{output[-5000:]}\n```",
                                "design": "The previous design led to an implementation whose tests keep failing:\n"
-                               f"```\n{output[-3000:]}\n```"}
+                               f"```\n{output[-3000:]}\n```",
+                               "tests": "RE-CHECK: these new tests fail against the implementation, and the implementer "
+                               "reviewed them and kept its code, i.e. it believes the implementation is right. Check each "
+                               "failing assertion against the issue and the library's existing output conventions; run the "
+                               "code (`uv run python -c ...`) to see the actual output. Fix the expectation if it is wrong. "
+                               "If the acceptance criterion itself is wrong or contradicts another criterion, follow the "
+                               "issue and add a line `AC-CONFLICT: <AC id>: <reason>` to your final message. Do not "
+                               "weaken a test just to make it pass.\n"
+                               f"```\n{output[-4000:]}\n```"}
         return upd
 
     # ------------------------------------------------------------ stage 5: release (code, writes to GitHub)
@@ -432,6 +467,7 @@ class Nodes:
         stage = state.get("stopped_at") or self._failing_stage(state)
         reason = state.get("stop_reason") or "; ".join((state.get("stages") or {}).get(stage, {}).get("notes", [])[-1:]) \
             or "check did not pass within its retries"
+        reason = f"{reason} (after {(state.get('attempts') or {}).get(stage, 0)} attempt(s))"
         name = {"spec": "spec.md", "design": "design.md", "implement": "implement_check.md",
                 "test": "test_report.md", "release": "pr.md"}.get(stage, "state.md")
         p = self.c.out / name
