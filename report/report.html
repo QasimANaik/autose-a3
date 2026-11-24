@@ -37,9 +37,9 @@ a { color: #2f5fbf; text-decoration: none; }
 <body>
 
 <h1>AutoSE: an agentic issue-to-pull-request workflow</h1>
-<div class="meta">Assignment 3, Automated Software Engineering · Roll no. 2025201064 · Fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> at upstream <code>f7ec702</code> · Submission repo <a href="https://github.com/QasimANaik/autose-a3">QasimANaik/autose-a3</a> · Agents: Gemini CLI 0.70.0 (headless) inside LangGraph 1.2.20 on GitHub Actions · Report state: 24 Nov 2026, after 8 workflow runs (1 complete)</div>
+<div class="meta">Assignment 3, Automated Software Engineering · Roll no. 2025201064 · Fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> at upstream <code>f7ec702</code> · Submission repo <a href="https://github.com/QasimANaik/autose-a3">QasimANaik/autose-a3</a> · Agents: Gemini CLI 0.70.0 (headless) inside LangGraph 1.2.20 on GitHub Actions · Report state: 24 Nov 2026, after 16 workflow runs (4 issues resolved with approved PRs)</div>
 
-<div class="pend"><b>Status of this report.</b> Sections 1, 2 and 6 describe the system as built. Sections 3 and 4 report only what has really been run: 8 workflow runs on issues #4 and #5, of which one (issue #4, run <a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a>) went through every stage. Rows marked <b>PENDING</b> (issues #1–#3 and #5 on the current workflow, the 5 seeded PRs, experiments E1 and E2) are filled in from <code>results/results.csv</code> once those runs exist. No result in this report is estimated or invented. Measured numbers come from the Gemini CLI usage files in the run artifacts.</div>
+<div class="pend"><b>Status of this report.</b> All numbers come from real runs (<code>results/results.csv</code>, <code>results/runs.md</code>, run artifacts) and the hidden tests kept outside the fork. <b>Done:</b> 16 workflow runs; bot PRs for all five issues (#1, #2, #3, #4, #18); <b>hidden tests 20/20</b>; four approved reviews; total cost <b>$4.04</b>. <b>PENDING:</b> the 5 seeded PRs and the two decision experiments (E1, E2), whose tables show the protocol and the baseline data points that already exist. Issue #5 (vague) was closed and replaced by #18 (Section 6).</div>
 
 <!-- ======================================================================= 1 -->
 <h2>1. Architecture</h2>
@@ -169,7 +169,7 @@ a { color: #2f5fbf; text-decoration: none; }
 
 <!-- ======================================================================= 2 -->
 <h2 class="pb">2. Design decisions</h2>
-<p class="sub">Full ADRs in Nygard format are in <code>architecture/decisions/</code>. Three ADRs were superseded after real runs and kept as the assignment requires. "Main reason" is the short form; the evidence is in each ADR.</p>
+<p class="sub">Full ADRs in Nygard format are in <code>architecture/decisions/</code>. Four ADRs (001, 002, 004, 006) were superseded after real runs and kept as the assignment requires. "Main reason" is the short form; the evidence is in each ADR.</p>
 <table class="small">
 <tr><th>ADR</th><th>Decision (area)</th><th>Chosen option</th><th>Main rejected option</th><th>Main reason</th><th>Status</th></tr>
 <tr><td>001</td><td>Splitting the work (D1)</td><td>one builder role, one call per stage, + one reviewer</td><td>one agent for all stages</td><td>fresh small contexts; independent reviewer</td><td>Superseded by 011</td></tr>
@@ -186,98 +186,129 @@ a { color: #2f5fbf; text-decoration: none; }
 <tr><td>012</td><td>Control flow (D2)</td><td>LangGraph StateGraph, routes are Python functions over check results</td><td>keep the hand-written state machine</td><td>fan-out/fan-in and checkpoints from the framework; maintainers already use it (SpecBridge)</td><td>Proposed</td></tr>
 <tr><td>013</td><td>State (D4)</td><td>SQLite checkpoint per node, carried as artifact; resume restores code from <code>patch</code></td><td>fresh start on every re-run</td><td>a late crash does not repeat paid stages</td><td>Proposed</td></tr>
 <tr><td>014</td><td>Models (D6)</td><td>gemini-3.5-flash-lite for every agent node, 3.1-flash-lite fallback</td><td>Flash builder + Pro reviewer (006)</td><td>about 3× cheaper; Pro has no free tier; reviewer allowed to share the model</td><td>Accepted</td></tr>
+<tr><td>015</td><td>Tools / checks (D5, D7)</td><td>existing tests may change only if the design declares the file and cites the AC that requires it; implement may edit just those</td><td>tests always read-only (ADR-005)</td><td>issue #1 needs new expected output in upstream fixtures; correct code was blocked</td><td>Proposed</td></tr>
+<tr><td>016</td><td>Safety and failures (D9)</td><td>a stage-4 failure still stops the run, but opens a DRAFT PR listing the failing tests</td><td>continue to release and review with a warning</td><td>keeps the assignment's stage gate; the human gets code to inspect</td><td>Accepted</td></tr>
 </table>
 
 <h3>2.1 The three decisions that mattered most</h3>
 <div class="own">
-<p><b>(1) Every check and route is code, not a model (ADR-007, ADR-012).</b> Each failed run stopped at a precise place with a reason in the stage's artifact. That turned every failure into a concrete fix: run 3 → <a href="https://github.com/QasimANaik/mistune/pull/7">PR #7</a>, run 4 → PR #7, run 6 → <a href="https://github.com/QasimANaik/mistune/pull/9">PR #9</a>, run 7 → <a href="https://github.com/QasimANaik/mistune/pull/10">PR #10</a>. The same runs also exposed the cost of this decision. A code check is only as good as its rules. Four of the five failed runs were stopped by our own checks or routes, not by bad agent output:
+<p><b>(1) Every check and route is code, not a model (ADR-007, ADR-012).</b> Each failed run stopped at a precise place with a reason in its artifact, and each became a concrete, testable fix (Table 3). The same runs exposed the cost of this decision. A code check is only as good as its rules, and most failures were caused by our own checks or routes, not by bad agent code:
 <ul>
-<li>a model outage counted as a spec failure (run 3);</li>
-<li><code>ruff .</code> blamed the implementer for the workers' files (run 4);</li>
-<li>no route existed for "the test is wrong" (run 6);</li>
-<li>a parser rejected <code>(new)</code> inside backticks (run 7).</li>
+<li>a model outage scored as a spec failure (run 3);</li>
+<li><code>ruff .</code> blaming the implementer for the workers' files (run 4);</li>
+<li>no route for "the test is wrong" (run 6);</li>
+<li>a parser rejecting <code>(new)</code> inside backticks (run 7) and a backticked <code>None</code> (run 12);</li>
+<li>no way to change existing tests (run 11);</li>
+<li>a CI failure routed to the implementer when a generated test was at fault (run 16).</li>
 </ul>
-Deterministic checks are cheap and reproducible, but each one needs a clear owner: which stage may fix what it checks.</p>
-<p><b>(2) Role separation enforced in code, with parallel test workers (ADR-005, ADR-011).</b> The implementer may only change <code>src/</code> and the workers only their own test file. Everything else is reverted after the call. In run 4 this stopped the implementer from editing <code>tests/fixtures/math.txt</code> and two generated tests to make failing tests pass. Splitting stage 4 into one worker per acceptance-criterion group kept each context small: 230–340k tokens per worker in run 8. The cost of separation showed in run 6: a worker faithfully tested a <i>wrong</i> acceptance criterion, and the implementer could not touch tests. That needed a new route, <code>loop_dispute</code>: when only new tests fail and the implementer keeps its code, exactly those test files are re-checked once, and a persisting disagreement goes to a human.</p>
-<p><b>(3) One cheap model everywhere, with independence carried by the job (ADR-014, ADR-008).</b> Price data and two failed model calls (a 429 and a retired fallback) moved the design from Flash + Pro to <code>gemini-3.5-flash-lite</code> everywhere. The complete run cost $0.21. Because the assignment does not require a different reviewer model, the reviewer's independence now rests on things a model cannot override:
+In three of those runs (6, 11 and 16) the agent's code was already correct: the hidden tests pass 4/4. Each check needs a clear owner, meaning the stage that is able to fix what it checks.</p>
+<p><b>(2) Role separation enforced in code, with parallel test workers (ADR-005, ADR-011, ADR-015).</b> The implementer may change only <code>src/</code> and each worker only its own test file. Everything else is reverted after the call:
+<ul>
+<li>run 4: <code>tests/fixtures/math.txt</code> and two generated tests reverted;</li>
+<li>runs 12 and 16: <code>tests/fixtures/url.txt</code> reverted.</li>
+</ul>
+So an agent never weakened a test to pass. Strict separation also blocked a legitimate behaviour change (issue #1, run 11). ADR-015 opened a narrow, traceable path: the design declares the fixture file and cites the AC that requires the change. In the re-run (run 14) the design declared <code>tests/fixtures/table.txt</code>, only that file changed, and the PR passed CI, review and 4/4 hidden tests. One worker per AC group kept contexts at 0.25–0.75M tokens per worker. When a worker tested a wrong AC (run 6), <code>loop_dispute</code> re-checks just those test files.</p>
+<p><b>(3) One cheap model everywhere, with independence carried by the job (ADR-014, ADR-008).</b> A 429, a retired fallback and the price list moved the design from Flash + Pro to <code>gemini-3.5-flash-lite</code> everywhere. A successful issue costs $0.21–$0.39 (mean $0.30) and takes 8–10 minutes. Because the reviewer shares the builder's model, its independence rests on things a model cannot override:
 <ul>
 <li>its own job with a read-only token;</li>
 <li>no builder artifacts, transcripts or PR body;</li>
 <li>its own adversarial prompt;</li>
-<li>a code judge that drops findings without evidence and rejects an "approve" that lists no checks.</li>
+<li>a code judge that enforces the evidence rule.</li>
 </ul>
-The open risk is correlated blind spots between builder and reviewer. Experiment E1 and the seeded PRs exist to measure it.</p>
+All four reviews were correct approvals, but none faced a defective PR. Whether a same-model reviewer catches planted bugs is exactly what E1 (seeded PRs) must still show.</p>
 </div>
 
 <!-- ======================================================================= 3 -->
 <h2>3. Decision experiments</h2>
-<p>Two ADRs are tested with controlled variants. Each variant is a <code>config.toml</code> entry selected by the workflow input <code>variant</code>, so the code is identical between arms (<code>experiment/variants.md</code>).</p>
+<p>Two ADRs are tested with controlled variants. Each variant is a <code>config.toml</code> entry selected by the workflow input <code>variant</code>, so the code is identical in both arms (<code>experiment/variants.md</code>).</p>
 <div class="two">
 <div>
 <h3>E1: ADR-008, reviewer independence</h3>
-<p><b>Arms:</b> <i>baseline</i> reviewer (runs code; adversarial checklist; evidence rule) vs <code>weak_reviewer</code> (read-only policy, cannot run anything; plain prompt). The model is the same in both arms after ADR-014.<br><b>Data:</b> 5 seeded PRs: 4 with planted defects (wrong edge case, removed HTML escaping, a test that asserts nothing, a fix in the wrong layer) and 1 clean fix. <b>Metric:</b> defects caught (of 4), false rejection of the clean PR, cost per review.</p>
-<table><tr><th>Seeded PR</th><th>Expected</th><th>baseline</th><th>weak_reviewer</th></tr>
-<tr><td>sp-1 edge case</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
-<tr><td>sp-2 escaping (XSS)</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
-<tr><td>sp-3 empty test</td><td>request changes (code)</td><td>PENDING</td><td>PENDING</td></tr>
+<p><b>Arms:</b> <i>baseline</i> reviewer (runs code; adversarial checklist; evidence rule) vs <code>weak_reviewer</code> (read-only, cannot run anything; plain prompt). Same model in both arms (ADR-014). <b>Data:</b> 5 seeded PRs: 4 with planted defects and 1 clean. <b>Metric:</b> defects caught (of 4), false rejection of the clean PR, cost.</p>
+<table><tr><th>Seeded PR</th><th>Expected</th><th>baseline</th><th>weak</th></tr>
+<tr><td>sp-1 edge case</td><td>request changes</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-2 escaping (XSS)</td><td>request changes</td><td>PENDING</td><td>PENDING</td></tr>
+<tr><td>sp-3 empty test</td><td>request changes</td><td>PENDING</td><td>PENDING</td></tr>
 <tr><td>sp-4 wrong layer</td><td>request changes (approach)</td><td>PENDING</td><td>PENDING</td></tr>
 <tr><td>sp-5 clean</td><td>approve</td><td>PENDING</td><td>PENDING</td></tr></table>
+<p class="small">Baseline evidence so far: 4 real reviews, 4 approvals, all confirmed by the hidden tests (4/4 each); 0 findings.</p>
 </div>
 <div>
 <h3>E2: ADR-003, hand-offs (ARCHITECTURE.md)</h3>
-<p><b>Arms:</b> <i>baseline</i> design stage reads ARCHITECTURE.md vs <code>no_arch</code> (file hidden from every agent via <code>git update-index --skip-worktree</code>). Runs use <code>stop_after=design</code> to save cost.<br><b>Data:</b> issues #1–#5 × 2 arms. <b>Metric:</b> design check passes first time; files named vs the files the reference fix changes; design tokens.</p>
-<table><tr><th>Issue</th><th>baseline: 1st-try pass / files right / tokens</th><th>no_arch: same</th></tr>
-<tr><td>#1 table</td><td>PENDING</td><td>PENDING</td></tr>
-<tr><td>#2 url</td><td>PENDING</td><td>PENDING</td></tr>
-<tr><td>#3 rel</td><td>PENDING</td><td>PENDING</td></tr>
-<tr><td>#4 toc</td><td>run 8: ✓ 1st try, <code>src/mistune/toc.py</code> ✓, 232k</td><td>PENDING</td></tr>
-<tr><td>#5 math</td><td>run 4: ✓ 1st try, 366k</td><td>PENDING</td></tr></table>
+<p><b>Arms:</b> <i>baseline</i> design reads ARCHITECTURE.md vs <code>no_arch</code> (file hidden from every agent). <code>stop_after=design</code>. <b>Metric:</b> design check passes first time; <code>src/</code> files named vs files the PR changed; design tokens.</p>
+<table><tr><th>Issue</th><th>baseline (from real runs)</th><th>no_arch</th></tr>
+<tr><td>#1 table</td><td>run 14: ✓ 1st try; <code>plugins/table.py</code> ✓ (+ fixture declared); 349k</td><td>PENDING</td></tr>
+<tr><td>#2 url</td><td>run 12: ✗ then ✓ (<code>None</code> parser); <code>plugins/url.py</code> ✓; 649k</td><td>PENDING</td></tr>
+<tr><td>#3 rel</td><td>run 11: ✓; <code>renderers/html.py</code> ✓; 580k</td><td>PENDING</td></tr>
+<tr><td>#4 toc</td><td>run 8: ✓; <code>toc.py</code> ✓; 232k</td><td>PENDING</td></tr>
+<tr><td>#18 www</td><td>run 16: ✓; <code>plugins/url.py</code> ✓, missed <code>inline_parser.py</code>; 287k</td><td>PENDING</td></tr></table>
 </div>
 </div>
-<div class="pend"><b>PENDING.</b> E1 and E2 have not been run yet. The tables above show the protocol and the two baseline data points that already exist from normal runs. <b>Design changes already driven by run evidence</b> (not by these experiments): PR #7 (outage handling, ruff scope, 8M token cap), PR #8 (ADR-006 → ADR-014), PR #9 (<code>loop_dispute</code>), PR #10 (design-check parser).</div>
+<div class="pend"><b>PENDING.</b> E1 and E2 have not been run. What the runs <i>did</i> change in the design is shown below. Each change came from a real run and was merged as a fork PR, and the next run confirmed it.</div>
+<table class="small">
+<tr><th>Run (issue)</th><th>Observation</th><th>Design change (fork PR)</th><th>Confirmed by</th></tr>
+<tr><td>3 (#5)</td><td>429 + retired fallback scored as a spec failure</td><td>outage = stop with the provider's reason; models updated (<a href="https://github.com/QasimANaik/mistune/pull/7">#7</a>)</td><td>later runs: no false clarify</td></tr>
+<tr><td>4 (#5)</td><td>stage-3 ruff covered worker files; 4M cap hit; implementer edited tests</td><td>ruff scope per stage; existing-test feedback; 8M cap (#7)</td><td>runs 8–16: no ruff misrouting</td></tr>
+<tr><td>prices</td><td>Pro has no free tier; cost is input-dominated</td><td>ADR-014: Lite model everywhere (<a href="https://github.com/QasimANaik/mistune/pull/8">#8</a>)</td><td>runs 8–16: $0.21–0.39 per success</td></tr>
+<tr><td>6 (#4)</td><td>correct code, wrong AC tested literally</td><td><code>loop_dispute</code> (<a href="https://github.com/QasimANaik/mistune/pull/9">#9</a>)</td><td>local replay with the run's real diff</td></tr>
+<tr><td>7 (#4)</td><td>design parser rejected <code>(new)</code> inside backticks</td><td>tolerant markers; tests checked for existence only (<a href="https://github.com/QasimANaik/mistune/pull/10">#10</a>)</td><td>run 8: success</td></tr>
+<tr><td>8 (#4)</td><td>99% input tokens; workers 56% of tokens</td><td>30 turns; summarised shell output; max 2 worker groups (<a href="https://github.com/QasimANaik/mistune/pull/12">#12</a>)</td><td>runs 10–16: 3 workers instead of 4–5</td></tr>
+<tr><td>11 (#1)</td><td>correct code blocked by 8 existing fixture tests</td><td>ADR-015 declared test updates (<a href="https://github.com/QasimANaik/mistune/pull/14">#14</a>)</td><td>run 14: PR #17 approved, hidden 4/4</td></tr>
+<tr><td>6, 11</td><td>nothing for the human to inspect after a stage-4 stop</td><td>ADR-016 draft PR listing failing tests (<a href="https://github.com/QasimANaik/mistune/pull/15">#15</a>)</td><td>local replay</td></tr>
+</table>
+<p class="small">Table 3. Run evidence → design changes.</p>
 
 <!-- ======================================================================= 4 -->
 <h2>4. Results</h2>
-<p>Eight workflow runs so far (<code>results/runs.md</code>). One was a skipped non-command comment and two were cancelled by hand. The table counts the five runs that started the pipeline, by how far each stage got. The workflow changed between runs (PRs #7–#10), so these are not repeated trials of one system.</p>
-<table>
-<tr><th>Stage</th><th>Reached</th><th>Passed (eventually)</th><th>Passed on 1st attempt</th><th>Why it did not pass</th></tr>
-<tr><td>1 Requirements</td><td>5</td><td>4</td><td>4</td><td>run 3: model unavailable (429 + retired fallback)</td></tr>
-<tr><td>2 Design</td><td>4</td><td>3</td><td>3</td><td>run 7: check parser rejected <code>(new)</code> inside backticks</td></tr>
-<tr><td>3 Implementation</td><td>3</td><td>2</td><td>2 (run 4 needed retries later)</td><td>run 4: 12 existing tests broken; later attempts failed a ruff check on files it may not edit; token cap</td></tr>
-<tr><td>4 Testing</td><td>3</td><td>1</td><td>1</td><td>run 4: over-broad change; run 6: wrong AC tested literally</td></tr>
-<tr><td>5 Release</td><td>1</td><td>1</td><td>1</td><td>–</td></tr>
-<tr><td>6 Review</td><td>1</td><td>approve</td><td>1</td><td>–</td></tr>
-</table>
+<p>16 workflow runs (<code>results/runs.md</code>): 11 started the pipeline, 3 were cancelled by hand and 2 were non-command comments skipped by the gate. The workflow changed between runs (Table 3), so the rates below describe its development history. On the final workflow (after PR #14) there were three pipeline runs: two reached approved PRs and one (#18) stopped at release.</p>
 <div class="two">
 <div>
-<h3>Hidden acceptance tests (kept outside the fork)</h3>
-<table><tr><th>Issue</th><th>Hidden tests</th><th>Result</th></tr>
-<tr><td>#4 ordered TOC</td><td>4 (3 fail on <code>f7ec702</code>)</td><td class="ok">4/4 on PR #11. Run 6's unreleased diff also scored 4/4</td></tr>
-<tr><td>#1 table cells</td><td>4</td><td>PENDING</td></tr>
-<tr><td>#2 url plugin</td><td>4</td><td>PENDING</td></tr>
-<tr><td>#3 link rel</td><td>4</td><td>PENDING</td></tr>
-<tr><td>#5 math (vague)</td><td>4</td><td>PENDING (run 4 stopped)</td></tr></table>
+<table>
+<tr><th>Stage</th><th>Reached</th><th>Passed</th><th>1st try</th><th>Why not</th></tr>
+<tr><td>1 Requirements</td><td>11</td><td>10</td><td>10</td><td>model outage (run 3)</td></tr>
+<tr><td>2 Design</td><td>10</td><td>9</td><td>8</td><td>check parser (runs 7, 12)</td></tr>
+<tr><td>3 Implement</td><td>9</td><td>8</td><td>9</td><td>stopped after test loops (run 4)</td></tr>
+<tr><td>4 Test</td><td>9</td><td>5</td><td>5</td><td>over-broad change (4), wrong AC (6), #5 math (9), existing fixtures (11)</td></tr>
+<tr><td>5 Release</td><td>5</td><td>4</td><td>4</td><td>PyPy-only CI failure of a generated tooling test (16)</td></tr>
+<tr><td>6 Review</td><td>4</td><td>4 approve</td><td>4</td><td>–</td></tr>
+</table>
+<p class="small">Table 4. Stage outcomes over the 11 pipeline runs.</p>
 </div>
 <div>
-<h3>Reviewer, and cost</h3>
-<p><b>Caught / wrong:</b> one review so far. It approved PR #11 after running pytest (1338 passed), ruff, mypy and the issue's example. The hidden tests (4/4) agree, so it was right. It has not yet faced a defective PR; the seeded PRs (E1) measure that. <span class="bad">PENDING</span>.</p>
-<p><b>Cost:</b> 36 agent calls, 10.58M input tokens (79% cached), 71.5k output tokens, <b>about $1.33 in total</b>. The complete run cost <b>$0.21</b>: build $0.194 + review $0.013, 8 min 15 s. The wasted runs cost $0.08–$0.66 each. Output tokens are under 1% of tokens, so cost is driven by turns × re-sent context, not by answers.</p>
+<table>
+<tr><th>Issue</th><th>Bot PR</th><th>Hidden tests (base → PR)</th><th>Review</th><th>Cost</th></tr>
+<tr><td>#1 table (bug)</td><td><a href="https://github.com/QasimANaik/mistune/pull/17">#17</a></td><td>0/4 → <b class="ok">4/4</b></td><td>approve ✓</td><td>$0.28</td></tr>
+<tr><td>#2 url (bug)</td><td><a href="https://github.com/QasimANaik/mistune/pull/16">#16</a></td><td>1/4 → <b class="ok">4/4</b></td><td>approve ✓</td><td>$0.31</td></tr>
+<tr><td>#3 rel (feature)</td><td><a href="https://github.com/QasimANaik/mistune/pull/13">#13</a></td><td>1/4 → <b class="ok">4/4</b></td><td>approve ✓</td><td>$0.39</td></tr>
+<tr><td>#4 toc (feature)</td><td><a href="https://github.com/QasimANaik/mistune/pull/11">#11</a></td><td>1/4 → <b class="ok">4/4</b></td><td>approve ✓</td><td>$0.21</td></tr>
+<tr><td>#18 www (vague)</td><td><a href="https://github.com/QasimANaik/mistune/pull/19">#19</a></td><td>2/4 → <b class="ok">4/4</b></td><td>not reached</td><td>$0.31</td></tr>
+<tr><td colspan="2"><b>All five</b></td><td><b>20/20</b> (base 5/20)</td><td>4/4 correct</td><td></td></tr>
+</table>
+<p class="small">Table 5. Hidden acceptance tests on each bot PR branch (<code>experiment/scripts/eval_hidden.sh</code>; base = <code>f7ec702</code>).</p>
 </div>
 </div>
+<p><b>What the reviewer caught, and where it was wrong.</b> Four reviews, four approvals, zero findings. All four approvals were correct: each PR passes its hidden tests, CI and the full suite. Every review ran the issue's own example, <code>pytest</code>, <code>ruff</code> and <code>mypy</code>. So far the reviewer has caught nothing, because no defective PR reached it (E1 pending). It had two blind spots:
+<ul>
+<li>For PR #17 it accepted the updated <code>table.txt</code> expectations with the general remark "fixtures are correctly updated", without listing which cases changed.</li>
+<li>It runs tests on CPython only, so it would not have caught #18's PyPy-only failure. In fact the stage gate stopped #18 before review.</li>
+</ul>
+Review cost $0.013–0.18 per round (100k–800k input tokens).</p>
+<p><b>Cost and time.</b> In total: 92 agent calls, 39.97M input tokens (81% cached), 240k output, <b>$4.04</b>. A successful issue costs $0.21–$0.39 (mean $0.30) and takes 8.3–10.2 min from comment to posted review. The 7 failed and 3 cancelled runs cost $2.85, 71% of the total, mostly on loop-backs that could not succeed. That is the strongest argument for the routing fixes in Table 3.</p>
 
 <!-- ======================================================================= 5 -->
 <h2>5. Hindsight</h2>
-<div class="own"><p>If I started again tomorrow, the first decision I would change is <b>how failures are classified (ADR-007 and ADR-009)</b>. I would design the failure taxonomy before the checks. Every stop should say whose fault it is (provider, our check, the test, the code, the requirement) and which stage owns the fix. In this project that knowledge arrived one failed run at a time: outage vs spec failure (PR #7), check scope vs stage permissions (PR #7), "the test is wrong" (PR #9), format strictness (PR #10). Each fix was small, but each cost a full run. A second change, close behind: write the tests <i>before</i> the implementation, from the spec. A wrong acceptance criterion (run 6) would then surface before any code exists, rather than as an implement/test disagreement at the end.</p></div>
+<div class="own"><p>If I started again tomorrow, the first decision I would change is <b>how failures are classified and who owns each check (ADR-007, ADR-009)</b>. I would write the failure taxonomy before writing any check: provider down, check wrong, requirement wrong, test wrong, code wrong, environment-specific. Each class would map to exactly one stage that can fix it. In this project that knowledge arrived one failed run at a time (Table 3). In three of the seven failed runs the code was already correct (hidden tests 4/4), and 71% of the money went on failed or cancelled runs, mostly loops that sent work to a stage that could not fix it. A second change, close behind: write the tests from the spec <i>before</i> the implementation, and keep tooling and performance requirements (mypy, benchmarks) out of the acceptance criteria. A wrong AC (run 6) and an environment-dependent test (run 16) would then surface before any code exists.</p></div>
 
 <!-- ======================================================================= 6 -->
 <h2>6. Limitations and threats to validity</h2>
 <ol>
-<li><b>Very small sample.</b> One complete run, one issue fully resolved, one review. Pass rates per stage rest on 1–5 observations and no repetitions. LLM output is not deterministic, so the same issue can pass or fail on a re-run.</li>
-<li><b>The system changed between runs.</b> PRs #7–#10 and a model change landed between runs 3 and 8, so the runs are a development history, not trials of one fixed system. Stage pass rates mix several versions.</li>
-<li><b>Author bias.</b> The same person wrote the issues, the hidden tests, the seeded defects and the workflow. The issues were chosen to be solvable in one or two files of a small, well-tested library, which favours the pipeline. Results may not transfer to larger or less tested repositories.</li>
-<li><b>Same model for builder and reviewer</b> (ADR-014). Errors may be correlated. The reviewer's single approval so far says nothing about its ability to catch defects, which E1 still has to measure.</li>
-<li><b>Cost figures</b> use Gemini paid-tier list prices (gemini-3.5-flash-lite $0.30 / $0.03 / $2.50 per 1M tokens) applied to the usage files. Free-tier calls were not actually billed, and implicit-cache hit rates (69–82%) vary between runs.</li>
-<li><b>Untested safety paths.</b> Resuming from a checkpoint, the dispute route and the prompt-injection defences were tested with local simulations (faked model and GitHub), not yet in a real Actions run. Injection was only observed as flagged phrases in a simulated issue.</li>
+<li><b>Small sample, no repetitions.</b> Five issues, one run each on the final workflow, four reviews. LLM output is not deterministic, so a re-run can pass or fail differently. Stage rates rest on 4–11 observations.</li>
+<li><b>The system changed between runs.</b> PRs #7–#15 and a model change landed during the runs, so the stage rates mix several versions of the workflow.</li>
+<li><b>Author bias and issue selection.</b> The same person wrote the issues, the hidden tests, the seeded defects and the workflow. The original vague issue (#5, inline math) was <b>closed and replaced</b> by #18 after three failed runs. That selection favours the pipeline, and the vague-issue result should be read with that in mind. Issue #1 turned out to be a behaviour change that contradicts upstream's own fixtures.</li>
+<li><b>Same model for builder and reviewer</b> (ADR-014). Errors may be correlated, and four correct approvals of correct PRs say nothing about detecting defects. E1 still has to measure that.</li>
+<li><b>Hidden tests are narrow</b> (4 per issue, written by the author), and CI differs from the local checks (PyPy). Passing hidden tests does not prove the PRs are mergeable as is. Merging is left to a human.</li>
+<li><b>Costs</b> are list prices applied to the usage files (gemini-3.5-flash-lite $0.30 / $0.03 / $2.50 per 1M). Implicit-cache hit rates varied (66–86%).</li>
+<li><b>Paths tested only locally.</b> Resume from checkpoint, the dispute route and the draft-PR hand-off were verified by local replays with a faked model, not in a real Actions run.</li>
 </ol>
 
 <!-- ======================================================================= Appendix -->
@@ -286,12 +317,21 @@ The open risk is correlated blind spots between builder and reviewer. Experiment
 <tr><th>#</th><th>Run</th><th>Issue</th><th>Model</th><th>Outcome</th><th>Calls</th><th>Tokens in (cached) / out</th><th>Cost</th><th>Finding → change</th></tr>
 <tr><td>1</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45234284925">45234284925</a></td><td>#5</td><td>–</td><td>skipped</td><td>0</td><td>–</td><td>$0</td><td>non-command comment ignored by the gate</td></tr>
 <tr><td>2</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45234300084">45234300084</a></td><td>#5</td><td>3-flash-preview</td><td>cancelled</td><td>–</td><td>–</td><td>–</td><td>cancelled by hand</td></tr>
-<tr><td>3</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45236521564">45236521564</a></td><td>#5</td><td>3-flash-preview</td><td>stopped at spec</td><td>4</td><td>0</td><td>$0</td><td>429 + retired fallback scored as spec failure → PR #7</td></tr>
-<tr><td>4</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45347324270">45347324270</a></td><td>#5</td><td>3-flash-preview</td><td>stopped at implement</td><td>10</td><td>4.16M (81%) / 31k</td><td>$0.66</td><td>over-broad change; test edits reverted; ruff scope; 4M cap → PR #7</td></tr>
+<tr><td>3</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45236521564">45236521564</a></td><td>#5</td><td>3-flash-preview</td><td>stopped: spec</td><td>4</td><td>0</td><td>$0</td><td>outage scored as spec failure → #7</td></tr>
+<tr><td>4</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45347324270">45347324270</a></td><td>#5</td><td>3-flash-preview</td><td>stopped: implement</td><td>10</td><td>4.16M (81%) / 31k</td><td>$0.66</td><td>ruff scope, test edits reverted, 4M cap → #7</td></tr>
 <tr><td>5</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45350365755">45350365755</a></td><td>#4</td><td>3.5-flash-lite</td><td>cancelled</td><td>–</td><td>–</td><td>–</td><td>cancelled by hand</td></tr>
-<tr><td>6</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45351202045">45351202045</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped at test</td><td>11</td><td>3.63M (77%) / 19k</td><td>$0.38</td><td>correct code, wrong AC → PR #9 <code>loop_dispute</code></td></tr>
-<tr><td>7</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45353435408">45353435408</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped at design</td><td>3</td><td>0.80M (82%) / 7k</td><td>$0.08</td><td>parser strictness → PR #10</td></tr>
-<tr><td>8</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a></td><td>#4</td><td>3.5-flash-lite</td><td class="ok">PR #11, approved</td><td>8</td><td>2.00M (79%) / 15k</td><td>$0.21</td><td>all stages first time; hidden 4/4</td></tr>
+<tr><td>6</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45351202045">45351202045</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped: test</td><td>11</td><td>3.63M (77%) / 19k</td><td>$0.38</td><td>wrong AC; code correct (hidden 4/4) → #9</td></tr>
+<tr><td>7</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45353435408">45353435408</a></td><td>#4</td><td>3.5-flash-lite</td><td>stopped: design</td><td>3</td><td>0.80M (82%) / 7k</td><td>$0.08</td><td>parser strictness → #10</td></tr>
+<tr><td>8</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45354704591">45354704591</a></td><td>#4</td><td>3.5-flash-lite</td><td class="ok">PR #11 approved</td><td>8</td><td>2.00M (79%) / 15k</td><td>$0.21</td><td>first complete run; hidden 4/4</td></tr>
+<tr><td>9</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45374180590">45374180590</a></td><td>#5</td><td>3.5-flash-lite</td><td>stopped: test</td><td>12</td><td>8.28M (86%) / 30k</td><td>$0.64</td><td>math change kept breaking tests; #5 replaced</td></tr>
+<tr><td>10</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45377035235">45377035235</a></td><td>#3</td><td>3.5-flash-lite</td><td class="ok">PR #13 approved</td><td>7</td><td>2.94M (66%) / 14k</td><td>$0.39</td><td>all stages first time; hidden 4/4</td></tr>
+<tr><td>11</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45379575388">45379575388</a></td><td>#1</td><td>3.5-flash-lite</td><td>stopped: test</td><td>10</td><td>5.51M (82%) / 50k</td><td>$0.55</td><td>existing fixtures block a correct change → #14</td></tr>
+<tr><td>12</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45393000300">45393000300</a></td><td>#2</td><td>3.5-flash-lite</td><td class="ok">PR #16 approved</td><td>8</td><td>3.60M (83%) / 18k</td><td>$0.31</td><td>design retry (<code>None</code>); fixture edit reverted; hidden 4/4</td></tr>
+<tr><td>13</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45394861968">45394861968</a></td><td>#5</td><td>3.5-flash-lite</td><td>cancelled</td><td>5</td><td>2.76M (85%) / 16k</td><td>$0.23</td><td>cancelled while replacing #5</td></tr>
+<tr><td>14</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45394898264">45394898264</a></td><td>#1</td><td>3.5-flash-lite</td><td class="ok">PR #17 approved</td><td>7</td><td>2.92M (83%) / 22k</td><td>$0.28</td><td>declared fixture update (ADR-015); hidden 4/4</td></tr>
+<tr><td>15</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45398325310">45398325310</a></td><td>#5</td><td>–</td><td>skipped</td><td>0</td><td>–</td><td>$0</td><td>comment on closed issue ignored</td></tr>
+<tr><td>16</td><td><a href="https://github.com/QasimANaik/mistune/actions/runs/45398556370">45398556370</a></td><td>#18</td><td>3.5-flash-lite</td><td>stopped: release</td><td>7</td><td>3.38M (82%) / 20k</td><td>$0.31</td><td>PyPy-only CI failure of a generated mypy/benchmark test; hidden 4/4</td></tr>
+<tr><td colspan="5"><b>Total</b></td><td><b>92</b></td><td><b>39.97M (81%) / 240k</b></td><td><b>$4.04</b></td><td></td></tr>
 </table>
 
 <h2>Appendix B. Run 8, per agent call (measured)</h2>
@@ -309,7 +349,7 @@ The open risk is correlated blind spots between builder and reviewer. Experiment
 
 <h2>Appendix C. Reproducibility, safety settings, AI use</h2>
 <ul>
-<li><b>Target:</b> fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> pinned at upstream <code>f7ec702edfc1ad5579a76f881238841af266d93c</code>. Workflow and agent code: <code>workflow/</code> (copy of <code>.github/workflows/autose.yml</code> and <code>autose/</code>), with the history of PRs #6–#10 in the fork.</li>
+<li><b>Target:</b> fork <a href="https://github.com/QasimANaik/mistune">QasimANaik/mistune</a> pinned at upstream <code>f7ec702edfc1ad5579a76f881238841af266d93c</code>. Workflow and agent code: <code>workflow/</code> (copy of <code>.github/workflows/autose.yml</code> and <code>autose/</code>), with the history of PRs #6–#15 in the fork.</li>
 <li><b>Branch protection:</b> ruleset <code>protect-main</code> (no deletion or force push; a PR with 1 code-owner approval is required; admin bypass for pull requests only). CODEOWNERS = the author, so a bot approval can never satisfy the merge rule. <i>Screenshot: appendix image (to add).</i></li>
 <li><b>Secrets and cost:</b> <code>GEMINI_API_KEY</code> is a repository secret, injected only into the build, rework and review jobs. Agent processes receive the Gemini key but never a GitHub token. There is a per-job token cap (8M), a 30-turn limit (60 before PR #12), summarised shell output and a 1200 s limit per agent call. <i>Budget alert screenshot: appendix image (to add).</i></li>
 <li><b>Local evidence:</b> <code>experiment/scripts/sim/</code> replays the graph with a fake model: happy path, build retry, crash and resume, review judge, rework, clarify, model outage, and test dispute (a replay of run 6 with its real diff).</li>
