@@ -2,8 +2,8 @@
 and an estimated cost per node / per run. Visual style follows the SpecBridge architecture.drawio.
 
 Prices: Gemini API Standard paid tier, USD per 1M tokens, read from https://aistudio.google.com/docs/pricing
-on 2026-11-24 (gemini-3.8-flash: $0.75 in / $0.075 cached / $3.75 out through 2026-12-31;
-gemini-3.1-pro-preview: $2.00 in / $0.20 cached / $12.00 out for prompts <= 200k tokens).
+on 2026-11-24. Every agent node uses gemini-3.5-flash-lite: $0.30 in / $0.03 cached / $2.50 out
+(fallback gemini-3.1-flash-lite: $0.25 / $0.025 / $1.50).
 Token counts are ESTIMATES (see the assumptions panel); replace them with out/usage/*.json after real runs.
 
 Usage: python3 architecture/views/gen_architecture.py
@@ -15,8 +15,7 @@ OUT = Path(__file__).resolve().parent / "architecture.drawio"
 
 # ---------------------------------------------------------------- cost model (estimates)
 PRICE = {  # USD per 1M tokens: input, cached input, output (incl. thinking)
-    "flash": (0.75, 0.075, 3.75),
-    "pro": (2.00, 0.20, 12.00),
+    "lite": (0.30, 0.03, 2.50),         # gemini-3.5-flash-lite (all agent nodes)
 }
 CACHE_HIT = 0.81  # measured: 3.37M of 4.16M input tokens were cached in run 45347324270
 
@@ -24,11 +23,11 @@ CACHE_HIT = 0.81  # measured: 3.37M of 4.16M input tokens were cached in run 453
 # Calibrated on the first real build run (45347324270, issue #5, 10 agent calls): spec 12 turns / 261k in,
 # design 12 / 366k, implement 14-22 / 309-557k, workers 19-28 / 345-674k; output only 1.4k-5.5k per call.
 CALLS = {
-    "understand": ("flash", 12, 22_000, 450),
-    "design": ("flash", 12, 30_000, 150),
-    "implement": ("flash", 18, 24_000, 170),
-    "worker": ("flash", 22, 19_000, 150),       # per test worker (criterion or e2e)
-    "reviewer": ("pro", 20, 30_000, 400),       # not measured yet (reviewer has not run)
+    "understand": ("lite", 12, 22_000, 450),
+    "design": ("lite", 12, 30_000, 150),
+    "implement": ("lite", 18, 24_000, 170),
+    "worker": ("lite", 22, 19_000, 150),       # per test worker (criterion or e2e)
+    "reviewer": ("lite", 20, 30_000, 400),      # not measured yet (reviewer has not run)
 }
 
 
@@ -129,7 +128,7 @@ gate = v("<b>gate</b> (job, no LLM)<br>reads the event file; accepts only OWNER 
 # ---------------------------------------------------------------- main graph
 v("<b>Main graph</b> - LangGraph StateGraph (AutoSEState, SQLite checkpoint after every node); job <i>build</i>, "
   "and again in job <i>rework-1</i>. Each agent node = one fresh headless <i>gemini -p</i> call (builder model "
-  "gemini-3.8-flash)", 230, 100, 1270, 660, CONTAINER + "strokeColor=#666666;")
+  "gemini-3.5-flash-lite)", 230, 100, 1270, 660, CONTAINER + "strokeColor=#666666;")
 start = v("START", 250, 210, 60, 40, TERM)
 intake = v("<b>intake</b> (code)<br>fetch issue via gh; flag injection-like phrases (kept as data); create branch "
            "autose/issue-N; repo setup" + FREE, 330, 170, 185, 130, CODE)
@@ -190,7 +189,7 @@ e(stop, end, "", SOLID, [(285, 665)], ex(0, 0.5) + en(0.5, 1))
 
 # ---------------------------------------------------------------- review graph
 v("<b>Review graph</b> - separate jobs <i>review-1</i> / <i>review-2</i>: read-only token, reviewer model "
-  "<b>gemini-3.1-pro-preview</b>, own prompt and checkpointer; sees ONLY the issue, the PR diff and the PR-head "
+  "<b>gemini-3.5-flash-lite</b> (same model as the builder; independent through job, prompt, permissions), own checkpointer; sees ONLY the issue, the PR diff and the PR-head "
   "checkout; never downloads the build artifacts", 230, 790, 1270, 230, CONTAINER + "strokeColor=#b85450;")
 rs = v("start", 250, 890, 50, 36, TERM)
 rin = v("<b>intake_pr</b> (code)<br>linked issue (Fixes #N) + gh pr diff; PR body and builder artifacts are NOT "
@@ -237,24 +236,24 @@ v("<b>Estimated cost</b> (Gemini API, Standard paid tier)<br>"
   "<tr><th>agent node</th><th>model</th><th>turns</th><th>tokens in / out</th><th>USD</th></tr>" + rows + "</table>"
   "<br><b>Measured</b> (run 45347324270, issue #5, gemini-3-flash-preview, 10 calls: spec, design, 3x implement, "
   "5 workers): 4.16M input tokens (81% cached), 31k output, <b>$0.66</b>.<br>"
-  f"<br><b>Per issue run</b> (calibrated estimate, gemini-3.8-flash prices)<br>"
+  f"<br><b>Per issue run</b> (calibrated estimate, gemini-3.5-flash-lite prices)<br>"
   f"• build job (spec + design + implement + {WORKERS} workers): <b>${BUILD:.2f}</b>, ~{BUILD_TOKENS / 1e6:.1f}M tokens<br>"
   f"• happy path (+ 1 review round): <b>${HAPPY:.2f}</b><br>"
   f"• with one rework round (+ implement, workers, review-2): <b>${HAPPY + REWORK:.2f}</b><br>"
   f"• worst case (every retry used): <b>≈ ${WORST:.0f}</b>, but the 8M-token cap per job stops it earlier<br>"
-  f"• seeded-PR review only: <b>${C['reviewer']:.2f}</b>; weak-reviewer variant (Flash, read-only): "
-  f"<b>≈ ${C['reviewer'] * (0.75 / 2.0) * 0.6:.2f}</b><br><br>"
+  f"• seeded-PR review only: <b>${C['reviewer']:.2f}</b>; weak-reviewer variant (same model, read-only, fewer turns): "
+  f"<b>≈ ${C['reviewer'] * 0.6:.2f}</b><br><br>"
   f"<b>Whole assignment</b> (5 issues, ~1 rework each; 5 seeded PRs x 2 reviewer variants; E2: 5 issues x 2 variants "
   f"up to design): <b>≈ ${5 * (HAPPY + REWORK) + 5 * C['reviewer'] * 1.25 + 10 * (C['understand'] + C['design']):.0f}</b>"
   f" (range about half to double).<br><br>"
   "<b>Assumptions</b>: each turn re-sends the whole context (Gemini CLI system prompt + tools ≈ 12k tokens, plus "
   f"files read so far); {int(CACHE_HIT * 100)}% of input is served from Gemini's implicit cache; output includes "
-  "thinking tokens. Prices per 1M tokens (in / cached / out): gemini-3.8-flash $0.75 / $0.075 / $3.75 (until "
-  "2026-12-31, then double); gemini-3.1-pro-preview $2.00 / $0.20 / $12.00 (prompts ≤ 200k). Source: "
+  "thinking tokens. Prices per 1M tokens (in / cached / out): gemini-3.5-flash-lite $0.30 / $0.03 / $2.50; "
+  "fallback gemini-3.1-flash-lite $0.25 / $0.025 / $1.50. Source: "
   "aistudio.google.com/docs/pricing, 2026-11-24. GitHub Actions minutes are free for a public repo. "
   "<b>Replace these estimates with out/usage/*.json after the real runs.</b><br><br>"
   "<b>Free tier</b>: one agent call = one API request per turn, so one issue run is roughly 100-150 requests; "
-  "the Flash free tier's daily request limit is far below that, and Pro has no free tier, so the runs need billing "
+  "the free tier's daily request limit is far below that, so the runs need billing "
   "with a budget cap.",
   1540, 88, 380, 700, COSTP)
 
@@ -281,8 +280,8 @@ v("<b>Every agent call</b> (agent.py): fresh headless <i>gemini -p</i> with an e
   "shell uv run pytest | ruff | mypy | python; denies web, git push / commit, gh, curl; 60 turns, 1200 s. A failure "
   "before any work (quota, retired model) is retried once on the fallback model, then stops the run with the reason.",
   230, 1200, 1270, 60, TOOL.replace("rounded=1", "rounded=0") + "align=left;spacingLeft=8;")
-v("<b>Gemini API</b> (secret GEMINI_API_KEY)<br>builder + workers: gemini-3.8-flash<br>reviewer: "
-  "gemini-3.1-pro-preview", 230, 1280, 290, 75, GREY)
+v("<b>Gemini API</b> (secret GEMINI_API_KEY)<br>all agent nodes: gemini-3.5-flash-lite<br>fallback: "
+  "gemini-3.1-flash-lite", 230, 1280, 290, 75, GREY)
 v("<b>GitHub fork</b> QasimANaik/mistune @ f7ec702<br>issues, branch, PR, reviews, labels; main protected",
   540, 1280, 300, 75, GREY)
 v("<b>GitHub Actions</b><br>8 jobs; tests.yml CI dispatched by release; artifacts carry checkpoints",
