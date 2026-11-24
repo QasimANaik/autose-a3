@@ -19,7 +19,7 @@ Token counts come from each agent call's `usage/*.json` (Gemini CLI stream-json 
 
 **Totals so far:** 46 agent calls, 16.09M input tokens (12.91M cached) and 121k output tokens, about **$1.88**.
 
-Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistune/pull/7), [#8](https://github.com/QasimANaik/mistune/pull/8), [#9](https://github.com/QasimANaik/mistune/pull/9), [#10](https://github.com/QasimANaik/mistune/pull/10), [#12](https://github.com/QasimANaik/mistune/pull/12) (token savings, before run 9); open: [#14](https://github.com/QasimANaik/mistune/pull/14).
+Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistune/pull/7), [#8](https://github.com/QasimANaik/mistune/pull/8), [#9](https://github.com/QasimANaik/mistune/pull/9), [#10](https://github.com/QasimANaik/mistune/pull/10), [#12](https://github.com/QasimANaik/mistune/pull/12) (token savings, before run 9); [#14](https://github.com/QasimANaik/mistune/pull/14) (declared existing-test updates, after run 9).
 Artifacts of runs 7 and 8 are copied to `results/artifacts/` (GitHub keeps them 90 days).
 
 ## Still to run
