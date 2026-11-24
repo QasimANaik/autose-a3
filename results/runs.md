@@ -15,13 +15,14 @@ Token counts come from each agent call's `usage/*.json` (Gemini CLI stream-json 
 | 6 | [45351202045](https://github.com/QasimANaik/mistune/actions/runs/45351202045) | #4 | gemini-3.5-flash-lite | failed | test | 11 | 3.63M (77%) / 19k | $0.38 | correct code (4/4 hidden), wrong AC tested literally, loops could only blame the code → **PR #9**: `loop_dispute` |
 | 7 | [45353435408](https://github.com/QasimANaik/mistune/actions/runs/45353435408) | #4 | gemini-3.5-flash-lite | failed | design | 3 | 0.80M (82%) / 7k | $0.08 | design-check parser rejected `(new)` inside backticks → **PR #10** |
 | 8 | [45354704591](https://github.com/QasimANaik/mistune/actions/runs/45354704591) | #4 | gemini-3.5-flash-lite | **PR opened, approved** | – | 8 | 2.00M (79%) / 15k | $0.21 | all stages first time; [PR #11](https://github.com/QasimANaik/mistune/pull/11), [CI](https://github.com/QasimANaik/mistune/actions/runs/45355186100) green; reviewer approved; hidden tests 4/4 |
+| 9 | [45379575388](https://github.com/QasimANaik/mistune/actions/runs/45379575388) | #1 | gemini-3.5-flash-lite | failed | test | 10 | 5.51M (82%) / 50k | $0.55 | correct code (agent diff passes 4/4 hidden tests) but issue #1 changes behaviour pinned by 8 EXISTING upstream fixture tests (`tests/fixtures/table.txt`, "Invalid Table"); the implementer may not edit tests → loops until stop → **PR #14**: declared existing-test updates |
 
-**Totals so far:** 36 agent calls, 10.58M input tokens (8.39M cached) and 71.5k output tokens, about **$1.33**.
+**Totals so far:** 46 agent calls, 16.09M input tokens (12.91M cached) and 121k output tokens, about **$1.88**.
 
-Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistune/pull/7), [#8](https://github.com/QasimANaik/mistune/pull/8), [#9](https://github.com/QasimANaik/mistune/pull/9), [#10](https://github.com/QasimANaik/mistune/pull/10).
+Workflow fixes merged between runs: [PR #7](https://github.com/QasimANaik/mistune/pull/7), [#8](https://github.com/QasimANaik/mistune/pull/8), [#9](https://github.com/QasimANaik/mistune/pull/9), [#10](https://github.com/QasimANaik/mistune/pull/10), [#12](https://github.com/QasimANaik/mistune/pull/12) (token savings, before run 9); open: [#14](https://github.com/QasimANaik/mistune/pull/14).
 Artifacts of runs 7 and 8 are copied to `results/artifacts/` (GitHub keeps them 90 days).
 
 ## Still to run
-- Issues #1, #2, #3 and #5 (with the current workflow).
+- Issue #1 again after PR #14; issues #2, #3 and #5 (with the current workflow).
 - 5 seeded PRs for the reviewer (`/autose review`), baseline and `weak_reviewer` (experiment E1).
 - Experiment E2: design stage with vs without ARCHITECTURE.md (`variant=no_arch`, `stop_after=design`).

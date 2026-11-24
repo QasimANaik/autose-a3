@@ -1,0 +1,4 @@
+Hidden tests for issue #1 against the src change of run 45379575388 (applied to main 4f38aad, not released):
+4 passed in 0.07s
+Full existing suite with that change: 8 failed, 1329 passed (tests/test_plugins.py table fixtures:
+test_invalid_table_002/004, test_mismatch_length_002/004 for TestPlugin1_table and TestPlugin2_table).
