@@ -18,15 +18,17 @@ PRICE = {  # USD per 1M tokens: input, cached input, output (incl. thinking)
     "flash": (0.75, 0.075, 3.75),
     "pro": (2.00, 0.20, 12.00),
 }
-CACHE_HIT = 0.70  # share of input tokens served from Gemini's implicit cache (repeated prefix every turn)
+CACHE_HIT = 0.81  # measured: 3.37M of 4.16M input tokens were cached in run 45347324270
 
 # agent node -> (model, turns, average context tokens per turn, output tokens per turn)
+# Calibrated on the first real build run (45347324270, issue #5, 10 agent calls): spec 12 turns / 261k in,
+# design 12 / 366k, implement 14-22 / 309-557k, workers 19-28 / 345-674k; output only 1.4k-5.5k per call.
 CALLS = {
-    "understand": ("flash", 15, 30_000, 1_500),
-    "design": ("flash", 20, 40_000, 1_200),
-    "implement": ("flash", 25, 50_000, 1_500),
-    "worker": ("flash", 12, 30_000, 1_000),     # per test worker (criterion or e2e)
-    "reviewer": ("pro", 20, 45_000, 1_500),
+    "understand": ("flash", 12, 22_000, 450),
+    "design": ("flash", 12, 30_000, 150),
+    "implement": ("flash", 18, 24_000, 170),
+    "worker": ("flash", 22, 19_000, 150),       # per test worker (criterion or e2e)
+    "reviewer": ("pro", 20, 30_000, 400),       # not measured yet (reviewer has not run)
 }
 
 
@@ -233,7 +235,9 @@ rows = "".join(
 v("<b>Estimated cost</b> (Gemini API, Standard paid tier)<br>"
   "<table border='1' cellpadding='2' style='border-collapse:collapse;font-size:10px'>"
   "<tr><th>agent node</th><th>model</th><th>turns</th><th>tokens in / out</th><th>USD</th></tr>" + rows + "</table>"
-  f"<br><b>Per issue run</b><br>"
+  "<br><b>Measured</b> (run 45347324270, issue #5, gemini-3-flash-preview, 10 calls: spec, design, 3x implement, "
+  "5 workers): 4.16M input tokens (81% cached), 31k output, <b>$0.66</b>.<br>"
+  f"<br><b>Per issue run</b> (calibrated estimate, gemini-3.8-flash prices)<br>"
   f"• build job (spec + design + implement + {WORKERS} workers): <b>${BUILD:.2f}</b>, ~{BUILD_TOKENS / 1e6:.1f}M tokens<br>"
   f"• happy path (+ 1 review round): <b>${HAPPY:.2f}</b><br>"
   f"• with one rework round (+ implement, workers, review-2): <b>${HAPPY + REWORK:.2f}</b><br>"
